@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -65,6 +66,41 @@ class ActivationRequestRepositoryTests {
 		assertThat(current.getStatus()).isEqualTo(ActivationStatus.PROCESSING);
 		assertThat(current.getUpdatedAt()).isEqualTo(first.getUpdatedAt());
 		assertThat(current.getVersion()).isEqualTo(1L);
+	}
+
+	@Test
+	void rejectsSecondRequestWithSameExternalId() {
+		ActivationRequest first = repository
+			.saveAndFlush(ActivationRequest.create("EXT-DUP", "CUST-1", "INTERNET-500", NOW));
+		ActivationRequest duplicate = ActivationRequest.create("EXT-DUP", "CUST-2", "INTERNET-900", NOW);
+
+		assertThatThrownBy(() -> repository.saveAndFlush(duplicate))
+			.isInstanceOf(DataIntegrityViolationException.class);
+		assertThat(repository.findAll()).extracting(ActivationRequest::getId).containsExactly(first.getId());
+	}
+
+	@Test
+	void findsByExternalId() {
+		ActivationRequest saved = repository.save(ActivationRequest.create("EXT-FIND", "CUST-1", "INTERNET-500", NOW));
+
+		assertThat(repository.findByExternalId("EXT-FIND")).map(ActivationRequest::getId).contains(saved.getId());
+	}
+
+	@Test
+	void findByUnknownExternalIdIsEmpty() {
+		assertThat(repository.findByExternalId("EXT-UNKNOWN")).isEmpty();
+	}
+
+	@Test
+	void externalIdDifferingOnlyInCaseIsDistinctRequest() {
+		ActivationRequest upper = repository
+			.saveAndFlush(ActivationRequest.create("EXT-CASE", "CUST-1", "INTERNET-500", NOW));
+		ActivationRequest lower = repository
+			.saveAndFlush(ActivationRequest.create("ext-case", "CUST-1", "INTERNET-500", NOW));
+
+		assertThat(repository.count()).isEqualTo(2);
+		assertThat(repository.findByExternalId("EXT-CASE")).map(ActivationRequest::getId).contains(upper.getId());
+		assertThat(repository.findByExternalId("ext-case")).map(ActivationRequest::getId).contains(lower.getId());
 	}
 
 }

@@ -24,7 +24,7 @@ public class ActivationRequest {
 	@Id
 	private UUID id;
 
-	@Column(name = "external_id", nullable = false, length = 64)
+	@Column(name = "external_id", nullable = false, length = 64, unique = true)
 	private String externalId;
 
 	@Column(name = "customer_id", nullable = false, length = 64)
