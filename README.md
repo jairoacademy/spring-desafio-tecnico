@@ -372,14 +372,19 @@ Micrometer Tracing com bridge OpenTelemetry, sem exportador de spans. Cada requi
 
 ### Índices da listagem
 
+Toda listagem filtra pelo dono da solicitação (`client_id`, do token). Por isso os índices começam pelo dono (migração `V4`, que substitui os índices da `V1`):
+
 | Índice | Atende |
 |---|---|
-| `(customer_id, created_at DESC)` | filtro por cliente, com ou sem `status`, já na ordem da paginação |
-| `(status, created_at DESC)` | filtro só por status (ex.: listar `FAILED`), já na ordem da paginação |
+| `(client_id, created_at DESC)` | listagem sem filtro, já na ordem da paginação |
+| `(client_id, customer_id, created_at DESC)` | filtro por cliente, com ou sem `status`, já na ordem da paginação |
+| `(client_id, status, created_at DESC)` | filtro só por status (ex.: listar `FAILED`), já na ordem da paginação |
+
+Com `customerId` e `status` juntos, o índice de cliente filtra e o status é conferido nas linhas lidas.
 
 O worker e a reconciliação usam índices parciais (migração `V3`): `(next_attempt_at) WHERE status = 'PENDING'` e `(updated_at) WHERE status = 'PROCESSING'`. Ficam pequenos, porque a maioria das linhas acaba `COMPLETED` ou `FAILED`.
 
-A listagem sem filtro faz varredura e ordenação da tabela, aceitável no volume do desafio. Evolução: índice em `(created_at DESC)` ou paginação por cursor (`createdAt`, `id`) em vez de `page`/`size`.
+Evolução para volumes grandes: paginação por cursor (`createdAt`, `id`) em vez de `page`/`size`, que evita contar e pular linhas.
 
 O schema é criado pelo Flyway (`db/migration`), e o Hibernate só valida que entidade e tabela batem (`spring.jpa.hibernate.ddl-auto=validate`).
 

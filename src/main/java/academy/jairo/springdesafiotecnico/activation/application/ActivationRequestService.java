@@ -20,7 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class ActivationRequestService {
 
-	// Ordenação fixa, atendida pelos índices (customer_id|status, created_at DESC); id desempata.
+	// Ordenação fixa, atendida pelos índices (client_id[, customer_id|status], created_at DESC); id desempata.
 	private static final Sort NEWEST_FIRST = Sort.by(Sort.Direction.DESC, "createdAt", "id");
 
 	private final ActivationRequestRepository repository;
@@ -38,14 +38,14 @@ public class ActivationRequestService {
 	 * Sem {@code @Transactional}: depois da violação a transação do PostgreSQL fica abortada, então o
 	 * insert e a releitura rodam cada um na transação do repositório.
 	 */
-	public CreationResult create(String externalId, String customerId, String productCode) {
+	public CreationResult create(String clientId, String externalId, String customerId, String productCode) {
 		Optional<ActivationRequest> existing = repository.findByExternalId(externalId);
 		if (existing.isPresent()) {
 			return resolveExisting(existing.get(), customerId, productCode);
 		}
 		try {
 			ActivationRequest saved = repository
-				.saveAndFlush(ActivationRequest.create(externalId, customerId, productCode, clock.instant()));
+				.saveAndFlush(ActivationRequest.create(clientId, externalId, customerId, productCode, clock.instant()));
 			return new CreationResult(saved, true);
 		}
 		catch (DataIntegrityViolationException ex) {

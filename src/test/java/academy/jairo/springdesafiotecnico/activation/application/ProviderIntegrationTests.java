@@ -40,6 +40,8 @@ class ProviderIntegrationTests {
 
 	private static final String ACTIVATE = "/provider/v1/activate";
 
+	private static final String OWNER = "sistema-a";
+
 	private static final Duration BACKOFF_BASE = Duration.ofMillis(200);
 
 	@RegisterExtension
@@ -186,9 +188,10 @@ class ProviderIntegrationTests {
 		UUID id = UUID.randomUUID();
 		Timestamp past = Timestamp.from(Instant.now().minusSeconds(3600));
 		jdbcTemplate.update("""
-				INSERT INTO activation_request (id, external_id, customer_id, product_code, status, attempts,
-				                                next_attempt_at, created_at, updated_at, version)
-				VALUES (?, 'EXT-OLD', 'CUST-1', 'INTERNET-500', 'PENDING', 0, ?, ?, ?, 0)""", id, past, past, past);
+				INSERT INTO activation_request (id, client_id, external_id, customer_id, product_code, status,
+				                                attempts, next_attempt_at, created_at, updated_at, version)
+				VALUES (?, 'sistema-a', 'EXT-OLD', 'CUST-1', 'INTERNET-500', 'PENDING', 0, ?, ?, ?, 0)""", id, past,
+				past, past);
 
 		dispatcher.dispatchDue();
 
@@ -201,7 +204,8 @@ class ProviderIntegrationTests {
 	void doesNotSendRequestWithFutureAttempt() {
 		stubStatus(200);
 		ActivationRequest request = repository
-			.save(ActivationRequest.create("EXT-FUTURE", "CUST-1", "INTERNET-500", Instant.now().plusSeconds(60)));
+			.save(ActivationRequest.create(OWNER, "EXT-FUTURE", "CUST-1", "INTERNET-500",
+					Instant.now().plusSeconds(60)));
 
 		dispatcher.dispatchDue();
 
@@ -263,7 +267,8 @@ class ProviderIntegrationTests {
 	}
 
 	private ActivationRequest saveProcessing(String externalId) {
-		ActivationRequest request = ActivationRequest.create(externalId, "CUST-1", "INTERNET-500", Instant.now());
+		ActivationRequest request = ActivationRequest.create(OWNER, externalId, "CUST-1", "INTERNET-500",
+				Instant.now());
 		request.startProcessing(Instant.now());
 		return repository.save(request);
 	}
@@ -275,7 +280,7 @@ class ProviderIntegrationTests {
 	}
 
 	private ActivationRequest save(String externalId) {
-		return repository.save(ActivationRequest.create(externalId, "CUST-1", "INTERNET-500", Instant.now()));
+		return repository.save(ActivationRequest.create(OWNER, externalId, "CUST-1", "INTERNET-500", Instant.now()));
 	}
 
 	private ActivationRequest reload(ActivationRequest request) {

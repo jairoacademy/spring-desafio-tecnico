@@ -34,6 +34,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class ActivationRequestRepositoryTests {
 
+	private static final String OWNER = "sistema-a";
+
 	private static final Instant NOW = Instant.parse("2026-01-10T12:00:00.123456789Z");
 
 	@Autowired
@@ -49,10 +51,12 @@ class ActivationRequestRepositoryTests {
 
 	@Test
 	void savesAndReadsBackAllFields() {
-		ActivationRequest saved = repository.save(ActivationRequest.create("EXT-1", "CUST-1", "INTERNET-500", NOW));
+		ActivationRequest saved = repository
+			.save(ActivationRequest.create(OWNER, "EXT-1", "CUST-1", "INTERNET-500", NOW));
 
 		ActivationRequest found = repository.findById(saved.getId()).orElseThrow();
 
+		assertThat(found.getClientId()).isEqualTo(OWNER);
 		assertThat(found.getExternalId()).isEqualTo("EXT-1");
 		assertThat(found.getCustomerId()).isEqualTo("CUST-1");
 		assertThat(found.getProductCode()).isEqualTo("INTERNET-500");
@@ -67,7 +71,7 @@ class ActivationRequestRepositoryTests {
 
 	@Test
 	void savesAndReadsBackFailureReason() {
-		ActivationRequest request = ActivationRequest.create("EXT-FAILED", "CUST-1", "INTERNET-500", NOW);
+		ActivationRequest request = ActivationRequest.create(OWNER, "EXT-FAILED", "CUST-1", "INTERNET-500", NOW);
 		request.startProcessing(NOW.plusSeconds(1));
 		request.fail(FailureReason.MAX_ATTEMPTS_EXCEEDED, NOW.plusSeconds(2));
 		ActivationRequest saved = repository.save(request);
@@ -80,7 +84,8 @@ class ActivationRequestRepositoryTests {
 
 	@Test
 	void rejectsSaveFromStaleCopy() {
-		ActivationRequest saved = repository.save(ActivationRequest.create("EXT-2", "CUST-1", "INTERNET-500", NOW));
+		ActivationRequest saved = repository
+			.save(ActivationRequest.create(OWNER, "EXT-2", "CUST-1", "INTERNET-500", NOW));
 		ActivationRequest first = repository.findById(saved.getId()).orElseThrow();
 		ActivationRequest second = repository.findById(saved.getId()).orElseThrow();
 
@@ -98,8 +103,8 @@ class ActivationRequestRepositoryTests {
 	@Test
 	void rejectsSecondRequestWithSameExternalId() {
 		ActivationRequest first = repository
-			.saveAndFlush(ActivationRequest.create("EXT-DUP", "CUST-1", "INTERNET-500", NOW));
-		ActivationRequest duplicate = ActivationRequest.create("EXT-DUP", "CUST-2", "INTERNET-900", NOW);
+			.saveAndFlush(ActivationRequest.create(OWNER, "EXT-DUP", "CUST-1", "INTERNET-500", NOW));
+		ActivationRequest duplicate = ActivationRequest.create(OWNER, "EXT-DUP", "CUST-2", "INTERNET-900", NOW);
 
 		assertThatThrownBy(() -> repository.saveAndFlush(duplicate))
 			.isInstanceOf(DataIntegrityViolationException.class);
@@ -108,7 +113,8 @@ class ActivationRequestRepositoryTests {
 
 	@Test
 	void findsByExternalId() {
-		ActivationRequest saved = repository.save(ActivationRequest.create("EXT-FIND", "CUST-1", "INTERNET-500", NOW));
+		ActivationRequest saved = repository
+			.save(ActivationRequest.create(OWNER, "EXT-FIND", "CUST-1", "INTERNET-500", NOW));
 
 		assertThat(repository.findByExternalId("EXT-FIND")).map(ActivationRequest::getId).contains(saved.getId());
 	}
@@ -121,9 +127,9 @@ class ActivationRequestRepositoryTests {
 	@Test
 	void externalIdDifferingOnlyInCaseIsDistinctRequest() {
 		ActivationRequest upper = repository
-			.saveAndFlush(ActivationRequest.create("EXT-CASE", "CUST-1", "INTERNET-500", NOW));
+			.saveAndFlush(ActivationRequest.create(OWNER, "EXT-CASE", "CUST-1", "INTERNET-500", NOW));
 		ActivationRequest lower = repository
-			.saveAndFlush(ActivationRequest.create("ext-case", "CUST-1", "INTERNET-500", NOW));
+			.saveAndFlush(ActivationRequest.create(OWNER, "ext-case", "CUST-1", "INTERNET-500", NOW));
 
 		assertThat(repository.count()).isEqualTo(2);
 		assertThat(repository.findByExternalId("EXT-CASE")).map(ActivationRequest::getId).contains(upper.getId());
@@ -133,7 +139,7 @@ class ActivationRequestRepositoryTests {
 	@Test
 	void concurrentClaimsGetDisjointBatchesWithoutWaiting() throws Exception {
 		for (int i = 1; i <= 4; i++) {
-			repository.save(ActivationRequest.create("EXT-DUE-" + i, "CUST-1", "INTERNET-500", NOW));
+			repository.save(ActivationRequest.create(OWNER, "EXT-DUE-" + i, "CUST-1", "INTERNET-500", NOW));
 		}
 		TransactionTemplate transaction = new TransactionTemplate(transactionManager);
 		CountDownLatch firstLocked = new CountDownLatch(1);
@@ -160,12 +166,13 @@ class ActivationRequestRepositoryTests {
 
 	@Test
 	void claimsOnlyDuePendingRequests() {
-		ActivationRequest due = repository.save(ActivationRequest.create("EXT-DUE", "CUST-1", "INTERNET-500", NOW));
-		repository.save(ActivationRequest.create("EXT-FUTURE", "CUST-1", "INTERNET-500", NOW.plusSeconds(60)));
-		ActivationRequest processing = ActivationRequest.create("EXT-PROCESSING", "CUST-1", "INTERNET-500", NOW);
+		ActivationRequest due = repository
+			.save(ActivationRequest.create(OWNER, "EXT-DUE", "CUST-1", "INTERNET-500", NOW));
+		repository.save(ActivationRequest.create(OWNER, "EXT-FUTURE", "CUST-1", "INTERNET-500", NOW.plusSeconds(60)));
+		ActivationRequest processing = ActivationRequest.create(OWNER, "EXT-PROCESSING", "CUST-1", "INTERNET-500", NOW);
 		processing.startProcessing(NOW);
 		repository.save(processing);
-		ActivationRequest completed = ActivationRequest.create("EXT-COMPLETED", "CUST-1", "INTERNET-500", NOW);
+		ActivationRequest completed = ActivationRequest.create(OWNER, "EXT-COMPLETED", "CUST-1", "INTERNET-500", NOW);
 		completed.startProcessing(NOW);
 		completed.complete(NOW);
 		repository.save(completed);

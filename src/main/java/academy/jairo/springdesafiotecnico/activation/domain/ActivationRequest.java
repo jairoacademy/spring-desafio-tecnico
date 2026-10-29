@@ -26,6 +26,10 @@ public class ActivationRequest {
 	@Id
 	private UUID id;
 
+	/** Cliente que criou a solicitação (claim {@code client_id}); não muda depois da criação. */
+	@Column(name = "client_id", nullable = false, length = 255, updatable = false)
+	private String clientId;
+
 	@Column(name = "external_id", nullable = false, length = 64, unique = true)
 	private String externalId;
 
@@ -63,8 +67,10 @@ public class ActivationRequest {
 		// exigido pelo JPA
 	}
 
-	private ActivationRequest(String externalId, String customerId, String productCode, Instant now) {
+	private ActivationRequest(String clientId, String externalId, String customerId, String productCode,
+			Instant now) {
 		this.id = UUID.randomUUID();
+		this.clientId = clientId;
 		this.externalId = externalId;
 		this.customerId = customerId;
 		this.productCode = productCode;
@@ -75,8 +81,9 @@ public class ActivationRequest {
 		this.updatedAt = now;
 	}
 
-	public static ActivationRequest create(String externalId, String customerId, String productCode, Instant now) {
-		return new ActivationRequest(externalId, customerId, productCode, truncate(now));
+	public static ActivationRequest create(String clientId, String externalId, String customerId, String productCode,
+			Instant now) {
+		return new ActivationRequest(clientId, externalId, customerId, productCode, truncate(now));
 	}
 
 	public void startProcessing(Instant now) {
@@ -145,6 +152,10 @@ public class ActivationRequest {
 
 	public UUID getId() {
 		return id;
+	}
+
+	public String getClientId() {
+		return clientId;
 	}
 
 	public String getExternalId() {

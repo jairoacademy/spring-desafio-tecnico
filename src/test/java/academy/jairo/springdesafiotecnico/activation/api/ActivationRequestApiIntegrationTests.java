@@ -221,8 +221,8 @@ class ActivationRequestApiIntegrationTests {
 		String customer = uniqueCustomer("CUST-A");
 		postRequest(body("EXT-PENDING", customer)).andExpect(status().isCreated());
 		// nenhum endpoint desta change muda status: a solicitação PROCESSING é gravada direto pelo repositório
-		ActivationRequest processing = ActivationRequest.create("EXT-PROCESSING", customer, "INTERNET-500",
-				Instant.now());
+		ActivationRequest processing = ActivationRequest.create(TestTokens.DEFAULT_CLIENT, "EXT-PROCESSING", customer,
+				"INTERNET-500", Instant.now());
 		processing.startProcessing(Instant.now());
 		repository.save(processing);
 		postRequest(body("EXT-OTHER", uniqueCustomer("CUST-B"))).andExpect(status().isCreated());
@@ -239,8 +239,8 @@ class ActivationRequestApiIntegrationTests {
 	void exposesFailureReasonOfFailedRequest() throws Exception {
 		String customer = uniqueCustomer("CUST-F");
 		// a falha é gravada direto pelo repositório, sem passar pelo provedor
-		ActivationRequest failed = ActivationRequest.create("EXT-FAILED-" + customer, customer, "INTERNET-500",
-				Instant.now());
+		ActivationRequest failed = ActivationRequest.create(TestTokens.DEFAULT_CLIENT, "EXT-FAILED-" + customer,
+				customer, "INTERNET-500", Instant.now());
 		failed.startProcessing(Instant.now());
 		failed.fail(FailureReason.MAX_ATTEMPTS_EXCEEDED, Instant.now());
 		repository.save(failed);
