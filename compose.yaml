@@ -1,6 +1,7 @@
 services:
   postgres:
     image: postgres:18
+    container_name: ativacao-db
     environment:
       POSTGRES_DB: ativacao
       POSTGRES_USER: ativacao
