@@ -4,7 +4,7 @@ import java.net.URI;
 import java.util.UUID;
 
 import academy.jairo.springdesafiotecnico.activation.application.ActivationRequestService;
-import academy.jairo.springdesafiotecnico.activation.domain.ActivationRequest;
+import academy.jairo.springdesafiotecnico.activation.application.CreationResult;
 import academy.jairo.springdesafiotecnico.activation.domain.ActivationStatus;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
@@ -34,12 +34,17 @@ class ActivationRequestController {
 
 	@PostMapping
 	ResponseEntity<ActivationRequestResponse> create(@Valid @RequestBody CreateActivationRequest body) {
-		ActivationRequest created = service.create(body.externalId(), body.customerId(), body.productCode());
+		CreationResult result = service.create(body.externalId(), body.customerId(), body.productCode());
+		ActivationRequestResponse response = ActivationRequestResponse.from(result.request());
+		if (!result.created()) {
+			// retry idêntico: devolve o registro existente, com o status atual
+			return ResponseEntity.ok(response);
+		}
 		URI location = ServletUriComponentsBuilder.fromCurrentRequest()
 			.path("/{id}")
-			.buildAndExpand(created.getId())
+			.buildAndExpand(response.id())
 			.toUri();
-		return ResponseEntity.created(location).body(ActivationRequestResponse.from(created));
+		return ResponseEntity.created(location).body(response);
 	}
 
 	@GetMapping("/{id}")

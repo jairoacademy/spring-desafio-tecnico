@@ -87,7 +87,7 @@ Os demais endpoints do Actuator (`env`, `beans`, `configprops` etc.) não são e
 
 | Método e caminho | Descrição | Sucesso |
 |---|---|---|
-| `POST /api/v1/requests` | Cria uma solicitação de ativação com status `PENDING` | `201` + header `Location` |
+| `POST /api/v1/requests` | Cria uma solicitação de ativação com status `PENDING` | `201` + header `Location`; `200` em retry idêntico; `409` se o `externalId` já existe com outro conteúdo |
 | `GET /api/v1/requests/{id}` | Consulta uma solicitação e seu status atual | `200` (`404` se não existir) |
 | `GET /api/v1/requests` | Lista solicitações, da mais recente para a mais antiga | `200` |
 
@@ -116,6 +116,29 @@ Content-Type: application/json
 ```
 
 Datas são ISO-8601 em UTC (sufixo `Z`), com precisão de microssegundos.
+
+O `externalId` é único em todo o serviço (ver [Duplicidade](#duplicidade)). Repetir o mesmo corpo devolve `200` com o registro existente, no status atual, sem header `Location`. O mesmo `externalId` com `customerId` ou `productCode` diferente devolve `409`:
+
+```bash
+curl -i -X POST localhost:8080/api/v1/requests \
+  -H 'Content-Type: application/json' \
+  -d '{"externalId":"EXT-12345","customerId":"CUST-10001","productCode":"INTERNET-900"}'
+```
+
+```http
+HTTP/1.1 409
+Content-Type: application/problem+json
+
+{
+  "type": "https://problems.ativacao.example/duplicate-external-id",
+  "title": "Solicitação duplicada",
+  "status": 409,
+  "detail": "Já existe solicitação com externalId EXT-12345 e conteúdo diferente.",
+  "instance": "/api/v1/requests",
+  "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
+  "conflictingFields": ["productCode"]
+}
+```
 
 ### Consultar
 
@@ -182,6 +205,7 @@ Todo erro da API é um [Problem Details (RFC 9457)](https://www.rfc-editor.org/r
 | Parâmetro com tipo inválido (`id` não UUID, `status` desconhecido) | `400` | `invalid-parameter` |
 | Corpo ilegível | `400` | `malformed-body` |
 | Solicitação inexistente | `404` | `not-found` |
+| `externalId` já registrado com outro conteúdo | `409` | `duplicate-external-id` (com `conflictingFields`) |
 | Erro inesperado | `500` | `internal-error` |
 | Demais erros do HTTP (`405`, `415`, ...) | o do erro | `about:blank` |
 
@@ -202,6 +226,37 @@ PENDING ──► PROCESSING ──► COMPLETED
 - `COMPLETED` e `FAILED` são finais. Qualquer outra transição lança `InvalidStatusTransitionException` sem alterar a solicitação.
 - Uma falha temporária leva `PROCESSING → PENDING`, incrementa `attempts` e agenda `nextAttemptAt`. Assim, `PROCESSING` significa só "chamada ao provedor em andamento", e o processamento assíncrono (próxima etapa) busca apenas `PENDING` com `nextAttemptAt` vencido.
 - Toda solicitação nasce com `attempts = 0` e `nextAttemptAt = createdAt` (elegível na hora). Esses campos e a versão (`@Version`, lock otimista) são internos e não aparecem na API.
+
+### Duplicidade
+
+Decisão registrada no [ADR 0001](docs/adr/0001-unicidade-external-id.md).
+
+O `externalId` é único em todo o serviço, de qualquer cliente, e a comparação diferencia maiúsculas de minúsculas. Quem garante é o banco, com a constraint `uq_activation_request_external_id UNIQUE (external_id)` (migração `V2`).
+
+Verificar se o `externalId` existe e depois inserir não basta. No `READ COMMITTED` do PostgreSQL, duas requisições podem fazer o `SELECT` antes de qualquer uma confirmar o `INSERT`:
+
+```
+T1: SELECT ... WHERE external_id='X'  → vazio
+T2: SELECT ... WHERE external_id='X'  → vazio
+T1: INSERT 'X' ; COMMIT
+T2: INSERT 'X' ; COMMIT               → segundo registro
+```
+
+Um lock na aplicação não vale com mais de uma instância; só o banco enxerga todas as transações. Por isso a criação:
+
+1. busca por `externalId`: se existe, resolve o retry sem tentar inserir (caso comum, sem exceção);
+2. insere com `saveAndFlush`, que força o `INSERT` na hora;
+3. se o banco recusa por violação, relê o registro vencedor e resolve como no passo 1. Se não há registro, a violação era outra e vira `500`.
+
+O serviço não abre transação própria na criação: no PostgreSQL, depois de um erro a transação fica abortada, e a releitura precisa de outra.
+
+| Cenário do enunciado | Resposta |
+|---|---|
+| Mesmo `externalId`, mesmo conteúdo (retry legítimo) | `200` com o registro existente e o status atual. O sistema de origem não sabe se a primeira chamada chegou; recebe `id` e status sem tratamento especial. Nenhum registro é criado ou alterado. |
+| Mesmo `externalId`, conteúdo diferente | `409` com `conflictingFields` (ex.: `["productCode"]`). Exige ação humana. A resposta não traz `id` nem valores do registro existente. |
+| Duas requisições idênticas em paralelo | Uma recebe `201`; as outras caem na violação, releem e recebem `200` com o mesmo `id`. |
+
+O teste `ActivationRequestConcurrencyIntegrationTests` dispara 10 criações simultâneas com o mesmo `externalId` contra o PostgreSQL do Testcontainers e verifica exatamente um registro, um único `created` e o mesmo `id` em todos os resultados.
 
 ### Entidade como modelo de domínio
 

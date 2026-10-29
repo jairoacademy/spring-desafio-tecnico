@@ -1,6 +1,8 @@
 package academy.jairo.springdesafiotecnico.activation.application;
 
 import java.time.Clock;
+import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import academy.jairo.springdesafiotecnico.activation.domain.ActivationRequest;
@@ -8,6 +10,7 @@ import academy.jairo.springdesafiotecnico.activation.domain.ActivationStatus;
 import academy.jairo.springdesafiotecnico.activation.infrastructure.ActivationRequestRepository;
 import academy.jairo.springdesafiotecnico.activation.infrastructure.ActivationRequestSpecifications;
 import org.jspecify.annotations.Nullable;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -29,9 +32,35 @@ public class ActivationRequestService {
 		this.clock = clock;
 	}
 
-	@Transactional
-	public ActivationRequest create(String externalId, String customerId, String productCode) {
-		return repository.save(ActivationRequest.create(externalId, customerId, productCode, clock.instant()));
+	/**
+	 * Cria a solicitação ou devolve a existente com o mesmo {@code externalId} e o mesmo conteúdo.
+	 * A constraint única do banco é a garantia; a busca prévia só evita a violação no retry sequencial.
+	 * Sem {@code @Transactional}: depois da violação a transação do PostgreSQL fica abortada, então o
+	 * insert e a releitura rodam cada um na transação do repositório.
+	 */
+	public CreationResult create(String externalId, String customerId, String productCode) {
+		Optional<ActivationRequest> existing = repository.findByExternalId(externalId);
+		if (existing.isPresent()) {
+			return resolveExisting(existing.get(), customerId, productCode);
+		}
+		try {
+			ActivationRequest saved = repository
+				.saveAndFlush(ActivationRequest.create(externalId, customerId, productCode, clock.instant()));
+			return new CreationResult(saved, true);
+		}
+		catch (DataIntegrityViolationException ex) {
+			// corrida com outra criação do mesmo externalId; sem registro, a violação foi outra
+			ActivationRequest winner = repository.findByExternalId(externalId).orElseThrow(() -> ex);
+			return resolveExisting(winner, customerId, productCode);
+		}
+	}
+
+	private static CreationResult resolveExisting(ActivationRequest existing, String customerId, String productCode) {
+		List<String> conflictingFields = existing.conflictingFields(customerId, productCode);
+		if (!conflictingFields.isEmpty()) {
+			throw new ActivationRequestConflictException(existing.getExternalId(), conflictingFields);
+		}
+		return new CreationResult(existing, false);
 	}
 
 	@Transactional(readOnly = true)
