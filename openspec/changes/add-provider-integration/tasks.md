@@ -8,8 +8,8 @@
 
 ## 2. Backoff e propriedades
 
-- [ ] 2.1 Criar `RetryPolicy` (design, decisão 7) com `base`, `max` e `RandomGenerator`; teste unitário sem Spring com gerador fixo nos extremos cobrindo os cenários "Atraso cresce a cada tentativa" e "Atraso limitado ao máximo" da spec, e tentativa alta sem overflow
-- [ ] 2.2 Criar o record `ActivationDispatchProperties` (`@ConfigurationProperties("activation.dispatch")`, validado) com os padrões da decisão 12 e registrá-lo; criar `src/test/resources/config/application.properties` com `activation.dispatch.enabled=false` e uma base URL para o grupo `provider`; verificar com `./mvnw verify` que os testes atuais continuam passando
+- [x] 2.1 Criar `RetryPolicy` (design, decisão 7) com `base`, `max` e `RandomGenerator`; teste unitário sem Spring com gerador fixo nos extremos cobrindo os cenários "Atraso cresce a cada tentativa" e "Atraso limitado ao máximo" da spec, e tentativa alta sem overflow
+- [x] 2.2 Criar o record `ActivationDispatchProperties` (`@ConfigurationProperties("activation.dispatch")`, validado) com os padrões da decisão 12 e registrá-lo; criar `src/test/resources/config/application.properties` com `activation.dispatch.enabled=false` e uma base URL para o grupo `provider`; verificar com `./mvnw verify` que os testes atuais continuam passando
 
 ## 3. Cliente do provedor
 
