@@ -2,6 +2,7 @@
 - Leia openspec/ e docs/desafio-tecnico-java.md antes de implementar.
 - Só implemente o que estiver em tasks.md da change ativa. Não antecipe changes futuras.
 - Cada change OpenSpec vive na sua branch `<tipo>/<nome-da-change>` e entra na main por PR com merge commit. Nunca commite direto na main durante uma change; se estiver na main, pare e avise.
+- Depois do merge do PR: atualize a main local (`git pull --ff-only`) e apague a branch da change no local (`git branch -d`) e no GitHub (`git push origin --delete`).
 - Ao concluir cada task: marque [x], rode ./mvnw verify e sugira a mensagem de commit (Conventional Commits, em português).
 - O README.md evolui junto com o código: toda task que muda como executar, configurar, testar ou usar a API atualiza o README no mesmo commit. Ao fechar uma etapa, marque [x] em docs/roteiro.md.
 - Nunca exponha stack trace na API. Nunca logue tokens/credenciais.
