@@ -20,18 +20,41 @@ Pré-requisito: Docker.
 docker compose up --build
 ```
 
-Sobe aplicação, PostgreSQL e o mock do provedor externo, cada um com health check. A aplicação só inicia depois que o banco e o mock do provedor estão saudáveis, e envia as solicitações ao mock (`PROVIDER_URL=http://wiremock:8080`). Para rodar em segundo plano e esperar todos ficarem saudáveis, use `docker compose up --build -d --wait`.
+Sobe aplicação, PostgreSQL, o mock do provedor externo e um emissor de tokens de desenvolvimento, cada um com health check. A aplicação só inicia depois que o banco e o mock do provedor estão saudáveis, e envia as solicitações ao mock (`PROVIDER_URL=http://wiremock:8080`). Para rodar em segundo plano e esperar todos ficarem saudáveis, use `docker compose up --build -d --wait`.
 
 | Serviço | Porta | Descrição |
 |---|---|---|
 | `app` | `8080` | Aplicação |
 | `postgres` | `5432` | PostgreSQL |
 | `wiremock` | `8089` | Mock do provedor externo (WireMock); stubs em `wiremock/mappings/` |
+| `oauth2` | `8091` | Emissor de tokens OAuth 2.0 ([mock-oauth2-server](https://github.com/navikt/mock-oauth2-server)); clientes em `oauth2/config.json` |
 
 ```bash
 curl localhost:8080/actuator/health/readiness
 curl -X POST localhost:8089/provider/v1/activate
 ```
+
+#### Token de acesso
+
+A API exige `Authorization: Bearer <JWT>`. O serviço `oauth2` emite tokens por client credentials para três clientes de exemplo:
+
+| `client_id` | Escopos |
+|---|---|
+| `sistema-a` | `activation:read activation:write` |
+| `sistema-b` | `activation:read activation:write` |
+| `sistema-leitura` | `activation:read` |
+
+```bash
+TOKEN=$(curl -s -X POST localhost:8091/default/token \
+  -d grant_type=client_credentials -d client_id=sistema-a -d client_secret=dev \
+  -d 'scope=activation:read activation:write' | jq -r .access_token)
+
+curl -H "Authorization: Bearer $TOKEN" localhost:8080/api/v1/requests
+```
+
+O `client_id` vai no corpo (`client_secret_post`): é por ele que o emissor escolhe as claims. Os tokens valem 15 minutos e trazem `iss` `http://localhost:8091/default`, `aud` `ativacao-api`, `client_id` e `scope`. Sem `jq`, copie o `access_token` da resposta.
+
+> **Só para desenvolvimento.** O `mock-oauth2-server` aceita qualquer segredo e emite token para qualquer `client_id`. Ele existe apenas no `compose.yaml`; em produção, a aplicação aponta para o servidor de autorização real (ver [Configuração da autenticação](#configuração-da-autenticação)).
 
 Para parar e apagar os dados: `docker compose down -v`.
 
@@ -42,11 +65,11 @@ Para parar e apagar os dados: `docker compose down -v`.
 Pré-requisitos: Java 21 e Docker.
 
 ```bash
-docker compose up -d postgres wiremock
+docker compose up -d postgres wiremock oauth2
 ./mvnw spring-boot:run -Dspring-boot.run.profiles=local
 ```
 
-No IntelliJ, informe `local` em **Active profiles** na Run Configuration. O perfil `local` aponta para o PostgreSQL (`localhost:5432`), o mock do provedor (`localhost:8089`) e o emissor de tokens (`localhost:8091`, JWKS em `/default/jwks`, emissor `http://localhost:8091/default`, audiência `ativacao-api`) do `compose.yaml`.
+No IntelliJ, informe `local` em **Active profiles** na Run Configuration. O perfil `local` aponta para o PostgreSQL (`localhost:5432`), o mock do provedor (`localhost:8089`) e o emissor de tokens (`localhost:8091`, JWKS em `/default/jwks`, emissor `http://localhost:8091/default`, audiência `ativacao-api`) do `compose.yaml`. O token é obtido como em [Token de acesso](#token-de-acesso).
 
 ### Testes
 
@@ -58,7 +81,7 @@ Build e testes com um único comando. Os testes sobem o próprio PostgreSQL via 
 
 `src/test/resources/config/application.properties` desliga o envio agendado nos testes (`activation.dispatch.enabled=false`): os testes do worker chamam o `ActivationDispatcher` direto, e só `ActivationDispatchSchedulingIntegrationTests` liga o agendamento.
 
-O pipeline de CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) roda a cada push e pull request: o job `verify` executa `./mvnw -B verify` e o job `compose-smoke` sobe o ambiente com `docker compose up --build --wait` e confere readiness, usuário não-root e mock do provedor.
+O pipeline de CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) roda a cada push e pull request: o job `verify` executa `./mvnw -B verify` e o job `compose-smoke` sobe o ambiente com `docker compose up --build --wait` e confere readiness, usuário não-root, mock do provedor e uma chamada à API com token de `sistema-leitura` obtido no `oauth2`.
 
 ### Coleção Bruno
 

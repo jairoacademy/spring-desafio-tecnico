@@ -25,7 +25,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - name: Sobe app, banco e mock do provedor
+      - name: Sobe app, banco, mock do provedor e emissor de tokens
         run: docker compose up --build --wait
       - name: Aplicação roda com usuário não-root
         run: |
@@ -36,6 +36,15 @@ jobs:
         run: curl -fsS localhost:8080/actuator/health/readiness
       - name: Mock do provedor responde
         run: curl -fsS -X POST localhost:8089/provider/v1/activate
+      - name: Token de desenvolvimento aceito pela aplicação
+        run: |
+          token=$(curl -fsS -X POST localhost:8091/default/token \
+            -d grant_type=client_credentials -d client_id=sistema-leitura -d client_secret=dev \
+            -d scope=activation:read | jq -r .access_token)
+          status=$(curl -sS -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $token" \
+            localhost:8080/api/v1/requests)
+          echo "status=$status"
+          test "$status" = "200"
       - name: Logs do Compose
         if: failure()
         run: docker compose logs

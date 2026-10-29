@@ -24,6 +24,10 @@ services:
       DB_USERNAME: ativacao
       DB_PASSWORD: ativacao
       PROVIDER_URL: http://wiremock:8080
+      # chaves pela rede interna; o iss é o endereço visto do host, de onde os tokens são pedidos
+      JWT_JWK_SET_URI: http://oauth2:8080/default/jwks
+      JWT_ISSUER_URI: http://localhost:8091/default
+      JWT_AUDIENCE: ativacao-api
     ports:
       - "8080:8080"
     depends_on:
@@ -41,6 +45,24 @@ services:
       - ./wiremock:/home/wiremock
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8080/__admin/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Emissor de tokens só para desenvolvimento: aceita qualquer segredo. O app não depende dele na subida:
+  # as chaves são buscadas na primeira requisição autenticada.
+  oauth2:
+    image: ghcr.io/navikt/mock-oauth2-server:6.0.4
+    container_name: ativacao-oauth2
+    environment:
+      JSON_CONFIG_PATH: /config/config.json
+    ports:
+      - "8091:8080"
+    volumes:
+      - ./oauth2:/config:ro
+    healthcheck:
+      # a imagem não tem shell nem curl
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8080/default/.well-known/openid-configuration"]
       interval: 5s
       timeout: 3s
       retries: 10
