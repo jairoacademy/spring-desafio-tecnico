@@ -1,0 +1,26 @@
+meta {
+  name: Consultar inexistente
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/v1/requests/00000000-0000-0000-0000-000000000000
+  body: none
+  auth: none
+}
+
+tests {
+  test("404 not-found com instance e traceId", function() {
+    expect(res.status).to.equal(404);
+    expect(res.getHeader("content-type")).to.contain("application/problem+json");
+    expect(res.body.type).to.equal("https://problems.ativacao.example/not-found");
+    expect(res.body.instance).to.equal("/api/v1/requests/00000000-0000-0000-0000-000000000000");
+    expect(res.body.traceId).to.match(/^[0-9a-f]{32}$/);
+  });
+}
+
+docs {
+  UUID válido que não existe. Repare em `instance` (caminho da requisição) e `traceId`.
+  **Experimente:** envie duas vezes e compare os `traceId`: um por requisição.
+}

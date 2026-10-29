@@ -1,0 +1,23 @@
+meta {
+  name: Id não UUID
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/v1/requests/abc
+  body: none
+  auth: none
+}
+
+tests {
+  test("400 invalid-parameter", function() {
+    expect(res.status).to.equal(400);
+    expect(res.body.type).to.equal("https://problems.ativacao.example/invalid-parameter");
+  });
+}
+
+docs {
+  O Spring não converte `abc` para `UUID` e lança `MethodArgumentTypeMismatchException`,
+  tratada em `handleTypeMismatch`. O valor enviado não é ecoado no `detail`.
+}

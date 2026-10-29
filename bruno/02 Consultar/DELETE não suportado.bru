@@ -1,0 +1,26 @@
+meta {
+  name: DELETE não suportado
+  type: http
+  seq: 4
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/requests/00000000-0000-0000-0000-000000000000
+  body: none
+  auth: none
+}
+
+tests {
+  test("405 em ProblemDetail com type about:blank", function() {
+    expect(res.status).to.equal(405);
+    expect(res.getHeader("content-type")).to.contain("application/problem+json");
+    expect(res.body.type).to.equal("about:blank");
+    expect(res.body.traceId).to.match(/^[0-9a-f]{32}$/);
+  });
+}
+
+docs {
+  Erro gerado pelo próprio Spring MVC, não por código nosso. Mesmo assim sai em ProblemDetail
+  com `traceId`, porque o `ApiExceptionHandler` herda de `ResponseEntityExceptionHandler`.
+  `about:blank` é o `type` padrão do RFC 9457 para erro HTTP genérico.
+}

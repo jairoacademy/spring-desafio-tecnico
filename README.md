@@ -60,6 +60,10 @@ Build e testes com um único comando. Os testes sobem o próprio PostgreSQL via 
 
 O pipeline de CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) roda a cada push e pull request: o job `verify` executa `./mvnw -B verify` e o job `compose-smoke` sobe o ambiente com `docker compose up --build --wait` e confere readiness, usuário não-root e mock do provedor.
 
+### Coleção Bruno
+
+Coleção [Bruno](https://www.usebruno.com/) em [`bruno/`](bruno/). Abra a pasta no app e rode as pastas em ordem (`01` antes de `04`), ou execute `bru run --env local` dentro de `bruno/` se tiver o Bruno CLI instalado.
+
 ### Configuração do banco
 
 | Variável | Descrição |

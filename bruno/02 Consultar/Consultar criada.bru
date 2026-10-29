@@ -1,0 +1,27 @@
+meta {
+  name: Consultar criada
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/requests/{{requestId}}
+  body: none
+  auth: none
+}
+
+tests {
+  test("200 com a solicitação", function() {
+    expect(res.status).to.equal(200);
+    expect(res.body.id).to.equal(bru.getVar("requestId"));
+    expect(res.body.status).to.equal("PENDING");
+  });
+}
+
+docs {
+  Usa `requestId` gravado por `01 Criar / Criar solicitação válida` (rode aquele antes).
+  Compare as datas com as da criação: são idênticas, porque os instantes são truncados em
+  microssegundos, a precisão do `timestamptz` do Postgres.
+
+  Status fica `PENDING` por enquanto: o processamento chega na Etapa 4.
+}

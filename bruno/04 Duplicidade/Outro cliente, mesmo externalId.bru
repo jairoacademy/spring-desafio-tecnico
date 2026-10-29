@@ -1,0 +1,35 @@
+meta {
+  name: Outro cliente, mesmo externalId
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/v1/requests
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "externalId": "{{externalId}}",
+    "customerId": "CUST-OUTRO",
+    "productCode": "INTERNET-500"
+  }
+}
+
+tests {
+  test("409 com conflictingFields só com customerId", function() {
+    expect(res.status).to.equal(409);
+    expect(res.body.conflictingFields).to.deep.equal(["customerId"]);
+  });
+}
+
+docs {
+  A unicidade é global, não por cliente, como diz o enunciado: outro `customerId` com o
+  mesmo `externalId` também é duplicidade. A alternativa por origem está no ADR 0001.
+}
