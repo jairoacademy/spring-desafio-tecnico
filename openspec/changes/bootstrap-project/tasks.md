@@ -12,7 +12,7 @@
 
 ## 3. ADR da versão do Spring Boot
 
-- [ ] 3.1 Escrever `docs/adr/0000-versao-spring-boot.md` (contexto, decisão, consequências) com base no plano §1.4 e verificar que o README tem link para a pasta `docs/adr/`
+- [x] 3.1 Escrever `docs/adr/0000-versao-spring-boot.md` (contexto, decisão, consequências) com base no plano §1.4 e verificar que o README tem link para a pasta `docs/adr/`
 
 ## 4. Imagem de contêiner
 

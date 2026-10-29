@@ -4,6 +4,7 @@ Desafio técnico Java (Spring Boot 4.1.2, Java 21), desenvolvido com Spec-Driven
 
 - Enunciado: [docs/desafio-tecnico-java.md](docs/desafio-tecnico-java.md)
 - Plano de execução: [docs/plano-sdd-openspec.md](docs/plano-sdd-openspec.md)
+- Decisões técnicas (ADRs): [docs/adr/](docs/adr/)
 
 > Em construção. Decisões técnicas serão documentadas ao longo do desenvolvimento.
 
