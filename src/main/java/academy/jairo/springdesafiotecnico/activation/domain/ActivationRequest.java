@@ -45,6 +45,10 @@ public class ActivationRequest {
 	@Column(name = "next_attempt_at", nullable = false)
 	private Instant nextAttemptAt;
 
+	@Enumerated(EnumType.STRING)
+	@Column(name = "failure_reason", length = 30)
+	private @Nullable FailureReason failureReason;
+
 	@Column(name = "created_at", nullable = false)
 	private Instant createdAt;
 
@@ -83,8 +87,9 @@ public class ActivationRequest {
 		transitionTo(ActivationStatus.COMPLETED, now);
 	}
 
-	public void fail(Instant now) {
+	public void fail(FailureReason reason, Instant now) {
 		transitionTo(ActivationStatus.FAILED, now);
+		this.failureReason = reason;
 	}
 
 	/** Falha temporária: volta para {@code PENDING} com nova tentativa agendada. */
@@ -92,6 +97,21 @@ public class ActivationRequest {
 		transitionTo(ActivationStatus.PENDING, now);
 		this.attempts++;
 		this.nextAttemptAt = truncate(nextAttemptAt);
+	}
+
+	/**
+	 * Falha temporária contada no limite de tentativas: {@code attempts} conta todas as falhas,
+	 * inclusive a última. Ao atingir {@code maxAttempts}, vai para {@code FAILED} com
+	 * {@link FailureReason#MAX_ATTEMPTS_EXCEEDED}; senão, volta para {@code PENDING}.
+	 */
+	public void registerTemporaryFailure(Instant nextAttemptAt, int maxAttempts, Instant now) {
+		if (attempts + 1 >= maxAttempts) {
+			fail(FailureReason.MAX_ATTEMPTS_EXCEEDED, now);
+			this.attempts++;
+		}
+		else {
+			scheduleRetry(nextAttemptAt, now);
+		}
 	}
 
 	/**
@@ -114,6 +134,7 @@ public class ActivationRequest {
 			throw new InvalidStatusTransitionException(status, target);
 		}
 		this.status = target;
+		this.failureReason = null;
 		this.updatedAt = truncate(now);
 	}
 
@@ -148,6 +169,10 @@ public class ActivationRequest {
 
 	public Instant getNextAttemptAt() {
 		return nextAttemptAt;
+	}
+
+	public @Nullable FailureReason getFailureReason() {
+		return failureReason;
 	}
 
 	public Instant getCreatedAt() {

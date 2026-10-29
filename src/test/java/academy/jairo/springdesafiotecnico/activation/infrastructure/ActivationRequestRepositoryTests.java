@@ -5,6 +5,7 @@ import java.time.Instant;
 import academy.jairo.springdesafiotecnico.TestcontainersConfiguration;
 import academy.jairo.springdesafiotecnico.activation.domain.ActivationRequest;
 import academy.jairo.springdesafiotecnico.activation.domain.ActivationStatus;
+import academy.jairo.springdesafiotecnico.activation.domain.FailureReason;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -48,7 +49,21 @@ class ActivationRequestRepositoryTests {
 		assertThat(found.getCreatedAt()).isEqualTo(saved.getCreatedAt());
 		assertThat(found.getUpdatedAt()).isEqualTo(saved.getUpdatedAt());
 		assertThat(found.getNextAttemptAt()).isEqualTo(saved.getCreatedAt());
+		assertThat(found.getFailureReason()).isNull();
 		assertThat(found.getVersion()).isZero();
+	}
+
+	@Test
+	void savesAndReadsBackFailureReason() {
+		ActivationRequest request = ActivationRequest.create("EXT-FAILED", "CUST-1", "INTERNET-500", NOW);
+		request.startProcessing(NOW.plusSeconds(1));
+		request.fail(FailureReason.MAX_ATTEMPTS_EXCEEDED, NOW.plusSeconds(2));
+		ActivationRequest saved = repository.save(request);
+
+		ActivationRequest found = repository.findById(saved.getId()).orElseThrow();
+
+		assertThat(found.getStatus()).isEqualTo(ActivationStatus.FAILED);
+		assertThat(found.getFailureReason()).isEqualTo(FailureReason.MAX_ATTEMPTS_EXCEEDED);
 	}
 
 	@Test

@@ -45,6 +45,7 @@ class ActivationRequestTest {
 		assertThat(request.getCreatedAt()).isEqualTo(truncated);
 		assertThat(request.getUpdatedAt()).isEqualTo(truncated);
 		assertThat(request.getNextAttemptAt()).isEqualTo(request.getCreatedAt());
+		assertThat(request.getFailureReason()).isNull();
 		assertThat(request.getVersion()).isNull();
 	}
 
@@ -55,6 +56,7 @@ class ActivationRequestTest {
 		request.complete(T2);
 
 		assertThat(request.getStatus()).isEqualTo(ActivationStatus.COMPLETED);
+		assertThat(request.getFailureReason()).isNull();
 		assertThat(request.getUpdatedAt()).isEqualTo(T2.truncatedTo(ChronoUnit.MICROS));
 	}
 
@@ -62,9 +64,10 @@ class ActivationRequestTest {
 	void definitiveFailureEndsFailed() {
 		ActivationRequest request = processingRequest();
 
-		request.fail(T2);
+		request.fail(FailureReason.PROVIDER_REJECTED, T2);
 
 		assertThat(request.getStatus()).isEqualTo(ActivationStatus.FAILED);
+		assertThat(request.getFailureReason()).isEqualTo(FailureReason.PROVIDER_REJECTED);
 		assertThat(request.getUpdatedAt()).isEqualTo(T2.truncatedTo(ChronoUnit.MICROS));
 	}
 
@@ -78,6 +81,36 @@ class ActivationRequestTest {
 		assertThat(request.getStatus()).isEqualTo(ActivationStatus.PENDING);
 		assertThat(request.getAttempts()).isEqualTo(1);
 		assertThat(request.getNextAttemptAt()).isEqualTo(nextAttempt.truncatedTo(ChronoUnit.MICROS));
+		assertThat(request.getUpdatedAt()).isEqualTo(T2.truncatedTo(ChronoUnit.MICROS));
+	}
+
+	@Test
+	void temporaryFailureBelowLimitSchedulesRetry() {
+		ActivationRequest request = processingRequest();
+		Instant nextAttempt = T2.plusSeconds(60);
+
+		request.registerTemporaryFailure(nextAttempt, 3, T2);
+
+		assertThat(request.getStatus()).isEqualTo(ActivationStatus.PENDING);
+		assertThat(request.getAttempts()).isEqualTo(1);
+		assertThat(request.getNextAttemptAt()).isEqualTo(nextAttempt.truncatedTo(ChronoUnit.MICROS));
+		assertThat(request.getFailureReason()).isNull();
+		assertThat(request.getUpdatedAt()).isEqualTo(T2.truncatedTo(ChronoUnit.MICROS));
+	}
+
+	@Test
+	void temporaryFailureOnLastAllowedAttemptFails() {
+		ActivationRequest request = processingRequest();
+		request.registerTemporaryFailure(T1, 3, T1);
+		request.startProcessing(T1);
+		request.registerTemporaryFailure(T1, 3, T1);
+		request.startProcessing(T1);
+
+		request.registerTemporaryFailure(T2.plusSeconds(60), 3, T2);
+
+		assertThat(request.getStatus()).isEqualTo(ActivationStatus.FAILED);
+		assertThat(request.getFailureReason()).isEqualTo(FailureReason.MAX_ATTEMPTS_EXCEEDED);
+		assertThat(request.getAttempts()).isEqualTo(3);
 		assertThat(request.getUpdatedAt()).isEqualTo(T2.truncatedTo(ChronoUnit.MICROS));
 	}
 
@@ -109,21 +142,31 @@ class ActivationRequestTest {
 		};
 		Consumer<ActivationRequest> toFailed = r -> {
 			r.startProcessing(T1);
-			r.fail(T1);
+			r.fail(FailureReason.PROVIDER_REJECTED, T1);
 		};
 		Consumer<ActivationRequest> stayPending = r -> {
 		};
 		Consumer<ActivationRequest> toProcessing = r -> r.startProcessing(T1);
 		return Stream.of(
 				Arguments.of("PENDING -> COMPLETED", stayPending, (Consumer<ActivationRequest>) r -> r.complete(T2)),
-				Arguments.of("PENDING -> FAILED", stayPending, (Consumer<ActivationRequest>) r -> r.fail(T2)),
+				Arguments.of("PENDING -> FAILED", stayPending,
+						(Consumer<ActivationRequest>) r -> r.fail(FailureReason.PROVIDER_REJECTED, T2)),
 				Arguments.of("PENDING -> PENDING (retry)", stayPending,
 						(Consumer<ActivationRequest>) r -> r.scheduleRetry(T2, T2)),
+				Arguments.of("PENDING -> falha temporária", stayPending,
+						(Consumer<ActivationRequest>) r -> r.registerTemporaryFailure(T2, 3, T2)),
+				Arguments.of("PENDING -> falha temporária no limite", stayPending,
+						(Consumer<ActivationRequest>) r -> r.registerTemporaryFailure(T2, 1, T2)),
+				Arguments.of("COMPLETED -> falha temporária", toCompleted,
+						(Consumer<ActivationRequest>) r -> r.registerTemporaryFailure(T2, 3, T2)),
+				Arguments.of("FAILED -> falha temporária", toFailed,
+						(Consumer<ActivationRequest>) r -> r.registerTemporaryFailure(T2, 3, T2)),
 				Arguments.of("PROCESSING -> PROCESSING", toProcessing,
 						(Consumer<ActivationRequest>) r -> r.startProcessing(T2)),
 				Arguments.of("COMPLETED -> PROCESSING", toCompleted,
 						(Consumer<ActivationRequest>) r -> r.startProcessing(T2)),
-				Arguments.of("COMPLETED -> FAILED", toCompleted, (Consumer<ActivationRequest>) r -> r.fail(T2)),
+				Arguments.of("COMPLETED -> FAILED", toCompleted,
+						(Consumer<ActivationRequest>) r -> r.fail(FailureReason.PROVIDER_REJECTED, T2)),
 				Arguments.of("COMPLETED -> PENDING (retry)", toCompleted,
 						(Consumer<ActivationRequest>) r -> r.scheduleRetry(T2, T2)),
 				Arguments.of("FAILED -> PROCESSING", toFailed, (Consumer<ActivationRequest>) r -> r.startProcessing(T2)),
@@ -142,6 +185,7 @@ class ActivationRequestTest {
 		Instant updatedAtBefore = request.getUpdatedAt();
 		int attemptsBefore = request.getAttempts();
 		Instant nextAttemptAtBefore = request.getNextAttemptAt();
+		FailureReason failureReasonBefore = request.getFailureReason();
 
 		assertThatThrownBy(() -> act.accept(request)).isInstanceOf(InvalidStatusTransitionException.class);
 
@@ -149,6 +193,7 @@ class ActivationRequestTest {
 		assertThat(request.getUpdatedAt()).isEqualTo(updatedAtBefore);
 		assertThat(request.getAttempts()).isEqualTo(attemptsBefore);
 		assertThat(request.getNextAttemptAt()).isEqualTo(nextAttemptAtBefore);
+		assertThat(request.getFailureReason()).isEqualTo(failureReasonBefore);
 	}
 
 }
