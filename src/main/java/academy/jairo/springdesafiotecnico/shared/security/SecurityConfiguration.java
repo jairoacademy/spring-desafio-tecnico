@@ -14,7 +14,8 @@ import org.springframework.security.web.SecurityFilterChain;
 
 /**
  * API como OAuth 2.0 Resource Server: JWT validado pelo decoder do Boot (JWKS, {@code iss}, {@code aud},
- * {@code exp}) e autorização por escopo. Os probes de saúde ficam públicos para o orquestrador.
+ * {@code exp}), autorização por escopo e {@code 401}/{@code 403} em ProblemDetail. Os probes de saúde ficam
+ * públicos para o orquestrador.
  */
 @Configuration(proxyBeanMethods = false)
 class SecurityConfiguration {
@@ -25,7 +26,8 @@ class SecurityConfiguration {
 	private static final int CLIENT_ID_MAX_LENGTH = 255;
 
 	@Bean
-	SecurityFilterChain securityFilterChain(HttpSecurity http) {
+	SecurityFilterChain securityFilterChain(HttpSecurity http, ProblemAuthenticationEntryPoint entryPoint,
+			ProblemAccessDeniedHandler accessDeniedHandler) {
 		http.authorizeHttpRequests(auth -> auth
 				.requestMatchers("/actuator/health/**").permitAll()
 				.requestMatchers(HttpMethod.POST, "/api/v1/requests").hasAuthority("SCOPE_activation:write")
@@ -33,7 +35,9 @@ class SecurityConfiguration {
 				.hasAuthority("SCOPE_activation:read")
 				// rota não mapeada ou método não suportado: 401 sem token, antes do 404/405 do MVC
 				.anyRequest().authenticated())
-			.oauth2ResourceServer(rs -> rs.jwt(Customizer.withDefaults()))
+			.oauth2ResourceServer(rs -> rs.jwt(Customizer.withDefaults())
+				.authenticationEntryPoint(entryPoint)
+				.accessDeniedHandler(accessDeniedHandler))
 			.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 			// stateless, sem cookie de sessão: o token vai no header e o navegador não o envia sozinho
 			.csrf(AbstractHttpConfigurer::disable);

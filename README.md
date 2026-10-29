@@ -260,12 +260,14 @@ Todo erro da API é um [Problem Details (RFC 9457)](https://www.rfc-editor.org/r
 | Campos inválidos (corpo ou parâmetros da listagem) | `400` | `validation-error` (com `errors`) |
 | Parâmetro com tipo inválido (`id` não UUID, `status` desconhecido) | `400` | `invalid-parameter` |
 | Corpo ilegível | `400` | `malformed-body` |
+| Token ausente, malformado ou inválido (assinatura, emissor, audiência, expiração, sem `client_id`) | `401` | `unauthorized` (com header `WWW-Authenticate: Bearer ...`) |
+| Token válido sem o escopo da operação | `403` | `forbidden` |
 | Solicitação inexistente | `404` | `not-found` |
 | `externalId` já registrado com outro conteúdo | `409` | `duplicate-external-id` (com `conflictingFields`) |
 | Erro inesperado | `500` | `internal-error` |
 | Demais erros do HTTP (`405`, `415`, ...) | o do erro | `about:blank` |
 
-O `type` usa o domínio reservado `.example`: é um identificador, não uma página. Respostas de erro nunca trazem stack trace, nome de classe, mensagem da exceção original nem detalhes do parser JSON. Um erro `500` é registrado no log em nível `ERROR` com o mesmo `traceId` devolvido ao cliente, o que permite localizar a falha a partir da resposta.
+O `type` usa o domínio reservado `.example`: é um identificador, não uma página. Respostas de erro nunca trazem stack trace, nome de classe, mensagem da exceção original nem detalhes do parser JSON. No `401` e no `403`, o `detail` é fixo: não repete o token nem o motivo da recusa (ex.: expiração); o motivo padrão da RFC 6750 vai só no header `WWW-Authenticate`. Um erro `500` é registrado no log em nível `ERROR` com o mesmo `traceId` devolvido ao cliente, o que permite localizar a falha a partir da resposta.
 
 ## Decisões técnicas
 
