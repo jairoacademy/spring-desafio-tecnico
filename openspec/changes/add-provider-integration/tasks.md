@@ -26,7 +26,7 @@
 ## 5. Ambiente, documentação e verificação final
 
 - [x] 5.1 `compose.yaml`: `PROVIDER_URL=http://wiremock:8080` no `app` e `depends_on` do `wiremock` saudável; verificar com `docker compose up --build --wait` que uma solicitação criada chega a `COMPLETED` pelo `GET`
-- [ ] 5.2 Escrever `docs/adr/0002-processamento-assincrono-outbox.md`, `docs/adr/0003-retry-e-idempotencia-com-provedor.md` (inclui `@Retryable`, circuit breaker como evolução e a premissa de deduplicação do provedor) e `docs/adr/0005-transicao-processing-pending.md` (por que a falha temporária volta para `PENDING` e não fica em `PROCESSING` com contador, e o diagrama ajustado); atualizar o README: tabela de comportamento por retorno do provedor, processamento assíncrono e garantia de envio, reconciliação, `failureReason` nos exemplos da API, `PROVIDER_URL` e as propriedades `activation.dispatch.*` e de timeout (com a regra `stale-after` > timeouts), contrato suposto do provedor; rodar `./mvnw verify` e verificar que passa
+- [x] 5.2 Escrever `docs/adr/0002-processamento-assincrono-outbox.md`, `docs/adr/0003-retry-e-idempotencia-com-provedor.md` (inclui `@Retryable`, circuit breaker como evolução e a premissa de deduplicação do provedor) e `docs/adr/0005-transicao-processing-pending.md` (por que a falha temporária volta para `PENDING` e não fica em `PROCESSING` com contador, e o diagrama ajustado); atualizar o README: tabela de comportamento por retorno do provedor, processamento assíncrono e garantia de envio, reconciliação, `failureReason` nos exemplos da API, `PROVIDER_URL` e as propriedades `activation.dispatch.*` e de timeout (com a regra `stale-after` > timeouts), contrato suposto do provedor; rodar `./mvnw verify` e verificar que passa
 
 ## Workflow follow-up
 
