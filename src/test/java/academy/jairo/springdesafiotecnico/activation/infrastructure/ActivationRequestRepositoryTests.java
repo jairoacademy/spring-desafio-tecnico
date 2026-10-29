@@ -1,6 +1,13 @@
 package academy.jairo.springdesafiotecnico.activation.infrastructure;
 
 import java.time.Instant;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import academy.jairo.springdesafiotecnico.TestcontainersConfiguration;
 import academy.jairo.springdesafiotecnico.activation.domain.ActivationRequest;
@@ -13,8 +20,10 @@ import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -29,6 +38,9 @@ class ActivationRequestRepositoryTests {
 
 	@Autowired
 	private ActivationRequestRepository repository;
+
+	@Autowired
+	private PlatformTransactionManager transactionManager;
 
 	@AfterEach
 	void cleanUp() {
@@ -116,6 +128,66 @@ class ActivationRequestRepositoryTests {
 		assertThat(repository.count()).isEqualTo(2);
 		assertThat(repository.findByExternalId("EXT-CASE")).map(ActivationRequest::getId).contains(upper.getId());
 		assertThat(repository.findByExternalId("ext-case")).map(ActivationRequest::getId).contains(lower.getId());
+	}
+
+	@Test
+	void concurrentClaimsGetDisjointBatchesWithoutWaiting() throws Exception {
+		for (int i = 1; i <= 4; i++) {
+			repository.save(ActivationRequest.create("EXT-DUE-" + i, "CUST-1", "INTERNET-500", NOW));
+		}
+		TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+		CountDownLatch firstLocked = new CountDownLatch(1);
+		CountDownLatch secondDone = new CountDownLatch(1);
+
+		// a primeira transação segura o lock até a segunda terminar; se a segunda esperasse, o await expiraria
+		CompletableFuture<List<UUID>> first = CompletableFuture.supplyAsync(() -> transaction.execute(status -> {
+			List<UUID> ids = ids(repository.lockDuePending(NOW.plusSeconds(1), 2));
+			firstLocked.countDown();
+			await(secondDone);
+			return ids;
+		}));
+		await(firstLocked);
+		List<UUID> second = transaction.execute(status -> ids(repository.lockDuePending(NOW.plusSeconds(1), 2)));
+		secondDone.countDown();
+
+		List<UUID> firstIds = first.get(10, TimeUnit.SECONDS);
+		assertThat(firstIds).hasSize(2);
+		assertThat(second).hasSize(2).doesNotContainAnyElementsOf(firstIds);
+		Set<UUID> all = new HashSet<>(firstIds);
+		all.addAll(second);
+		assertThat(all).containsExactlyInAnyOrderElementsOf(ids(repository.findAll()));
+	}
+
+	@Test
+	void claimsOnlyDuePendingRequests() {
+		ActivationRequest due = repository.save(ActivationRequest.create("EXT-DUE", "CUST-1", "INTERNET-500", NOW));
+		repository.save(ActivationRequest.create("EXT-FUTURE", "CUST-1", "INTERNET-500", NOW.plusSeconds(60)));
+		ActivationRequest processing = ActivationRequest.create("EXT-PROCESSING", "CUST-1", "INTERNET-500", NOW);
+		processing.startProcessing(NOW);
+		repository.save(processing);
+		ActivationRequest completed = ActivationRequest.create("EXT-COMPLETED", "CUST-1", "INTERNET-500", NOW);
+		completed.startProcessing(NOW);
+		completed.complete(NOW);
+		repository.save(completed);
+		TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+
+		List<UUID> claimed = transaction.execute(status -> ids(repository.lockDuePending(NOW.plusSeconds(1), 10)));
+
+		assertThat(claimed).containsExactly(due.getId());
+	}
+
+	private static List<UUID> ids(List<ActivationRequest> requests) {
+		return requests.stream().map(ActivationRequest::getId).toList();
+	}
+
+	private static void await(CountDownLatch latch) {
+		try {
+			assertThat(latch.await(5, TimeUnit.SECONDS)).as("espera pela outra transação").isTrue();
+		}
+		catch (InterruptedException ex) {
+			Thread.currentThread().interrupt();
+			throw new IllegalStateException(ex);
+		}
 	}
 
 }
