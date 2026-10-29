@@ -4,7 +4,7 @@
 
 - [x] 1.1 Criar `V3__provider_dispatch.sql` (coluna `failure_reason` com check e os índices parciais `ix_activation_request_pending_due` e `ix_activation_request_processing_updated`, design "Migration Plan"); adicionar o enum `FailureReason` e o campo `failureReason` (nullable) em `ActivationRequest`; trocar `fail(now)` por `fail(FailureReason, now)` e zerar o motivo nas outras transições; ajustar `ActivationRequestTest`; teste em `ActivationRequestRepositoryTests` gravando e relendo uma solicitação `FAILED` com motivo; verificar com `./mvnw verify`
 - [x] 1.2 Adicionar `ActivationRequest.registerTemporaryFailure(nextAttemptAt, maxAttempts, now)` (design, decisão 8); teste unitário sem Spring: abaixo do limite volta a `PENDING` com `attempts++` e `nextAttemptAt`; na última chamada permitida vai para `FAILED` com `MAX_ATTEMPTS_EXCEEDED` e `attempts` igual ao limite; fora de `PROCESSING` lança `InvalidStatusTransitionException` sem alterar nada
-- [ ] 1.3 Expor `failureReason` em `ActivationRequestResponse` (criação, consulta e listagem); testes em `ActivationRequestApiIntegrationTests`: `201` com `failureReason` `null` e `GET` de uma solicitação levada a `FAILED` pelo repositório com o motivo no corpo e na listagem por `status=FAILED`
+- [x] 1.3 Expor `failureReason` em `ActivationRequestResponse` (criação, consulta e listagem); testes em `ActivationRequestApiIntegrationTests`: `201` com `failureReason` `null` e `GET` de uma solicitação levada a `FAILED` pelo repositório com o motivo no corpo e na listagem por `status=FAILED`
 
 ## 2. Backoff e propriedades
 
