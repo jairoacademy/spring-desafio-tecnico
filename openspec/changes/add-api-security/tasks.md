@@ -12,7 +12,7 @@
 
 ## 3. Validação do token de ponta a ponta
 
-- [ ] 3.1 Criar `JwtValidationIntegrationTests` (decisão 11): WireMock em porta dinâmica servindo um JWKS com chave RSA gerada no teste, `jwk-set-uri` apontando para ele por `@DynamicPropertySource`, tokens assinados com Nimbus; cenários da spec "Validação do token": válido → `200`; chave fora do JWKS, `iss` errado, `aud` errado, `exp` além da tolerância e sem `client_id` → `401`; verificar com `./mvnw verify`
+- [x] 3.1 Criar `JwtValidationIntegrationTests` (decisão 11): WireMock em porta dinâmica servindo um JWKS com chave RSA gerada no teste, `jwk-set-uri` apontando para ele por `@DynamicPropertySource`, tokens assinados com Nimbus; cenários da spec "Validação do token": válido → `200`; chave fora do JWKS, `iss` errado, `aud` errado, `exp` além da tolerância e sem `client_id` → `401`; verificar com `./mvnw verify`
 
 ## 4. Dono da solicitação e isolamento
 
