@@ -21,6 +21,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -42,7 +43,7 @@ class UnexpectedErrorIntegrationTests {
 
 	@Test
 	void unexpectedFailureReturnsGenericProblemAndLogsSameTraceId(CapturedOutput output) throws Exception {
-		given(service.findById(any(UUID.class))).willThrow(new RuntimeException("segredo interno"));
+		given(service.findById(anyString(), any(UUID.class))).willThrow(new RuntimeException("segredo interno"));
 
 		String body = mockMvc.perform(get("/api/v1/requests/{id}", UUID.randomUUID()).with(TestTokens.readWrite()))
 			.andExpect(status().isInternalServerError())

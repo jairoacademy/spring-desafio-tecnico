@@ -52,12 +52,12 @@ class ActivationRequestController {
 	}
 
 	@GetMapping("/{id}")
-	ActivationRequestResponse findById(@PathVariable UUID id) {
-		return ActivationRequestResponse.from(service.findById(id));
+	ActivationRequestResponse findById(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id) {
+		return ActivationRequestResponse.from(service.findById(clientId(jwt), id));
 	}
 
 	@GetMapping
-	PageResponse<ActivationRequestResponse> list(
+	PageResponse<ActivationRequestResponse> list(@AuthenticationPrincipal Jwt jwt,
 			@RequestParam(required = false) @Nullable ActivationStatus status,
 
 			@RequestParam(required = false)
@@ -73,7 +73,8 @@ class ActivationRequestController {
 			@Min(value = 1, message = "deve ser maior ou igual a 1")
 			@Max(value = 100, message = "deve ser menor ou igual a 100")
 			int size) {
-		return PageResponse.from(service.findAll(status, customerId, page, size), ActivationRequestResponse::from);
+		return PageResponse.from(service.findAll(clientId(jwt), status, customerId, page, size),
+				ActivationRequestResponse::from);
 	}
 
 	/**

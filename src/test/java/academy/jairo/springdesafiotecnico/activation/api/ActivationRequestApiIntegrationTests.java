@@ -197,6 +197,25 @@ class ActivationRequestApiIntegrationTests {
 	}
 
 	@Test
+	void requestOfAnotherClientIsNotFoundLikeUnknownId() throws Exception {
+		String id = createAs("sistema-a", validBody("EXT-BOLA"));
+		UUID unknown = UUID.randomUUID();
+
+		MvcResult foreign = expectProblem(mockMvc.perform(get("/api/v1/requests/{id}", id)
+			.with(TestTokens.client("sistema-b", TestTokens.READ))), 404).andReturn();
+		MvcResult missing = expectProblem(mockMvc.perform(get("/api/v1/requests/{id}", unknown)
+			.with(TestTokens.client("sistema-b", TestTokens.READ))), 404).andReturn();
+
+		String foreignJson = foreign.getResponse().getContentAsString();
+		String missingJson = missing.getResponse().getContentAsString();
+		assertThat(JsonPath.<String>read(foreignJson, "$.type")).isEqualTo(JsonPath.read(missingJson, "$.type"));
+		assertThat(JsonPath.<String>read(foreignJson, "$.title")).isEqualTo(JsonPath.read(missingJson, "$.title"));
+		assertThat(JsonPath.<String>read(foreignJson, "$.detail"))
+			.isEqualTo(JsonPath.<String>read(missingJson, "$.detail").replace(unknown.toString(), id));
+		assertThat(foreignJson).doesNotContain("EXT-BOLA", "CUST-10001", "sistema-a");
+	}
+
+	@Test
 	void rejectsIdThatIsNotUuid() throws Exception {
 		expectProblem(perform(get("/api/v1/requests/abc")), 400)
 			.andExpect(jsonPath("$.type").value("https://problems.ativacao.example/invalid-parameter"))
@@ -229,6 +248,21 @@ class ActivationRequestApiIntegrationTests {
 			.andExpect(jsonPath("$.content.length()").value(2))
 			.andExpect(jsonPath("$.content[*].customerId").value(everyItem(is(customerA))))
 			.andExpect(jsonPath("$.totalElements").value(2));
+	}
+
+	@Test
+	void listsOnlyRequestsOfAuthenticatedClient() throws Exception {
+		String customer = uniqueCustomer("CUST-SHARED");
+		createAs("sistema-a", body("EXT-SHARED-A1", customer));
+		createAs("sistema-a", body("EXT-SHARED-A2", customer));
+		createAs("sistema-b", body("EXT-SHARED-B1", customer));
+
+		mockMvc.perform(get("/api/v1/requests").param("customerId", customer)
+			.with(TestTokens.client("sistema-b", TestTokens.READ)))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.content.length()").value(1))
+			.andExpect(jsonPath("$.content[0].externalId").value("EXT-SHARED-B1"))
+			.andExpect(jsonPath("$.totalElements").value(1));
 	}
 
 	@Test
@@ -442,6 +476,17 @@ class ActivationRequestApiIntegrationTests {
 
 	private ResultActions postRequest(String body) throws Exception {
 		return perform(post("/api/v1/requests").contentType(MediaType.APPLICATION_JSON).content(body));
+	}
+
+	/** Cria como {@code clientId} e devolve o {@code id}. */
+	private String createAs(String clientId, String body) throws Exception {
+		MvcResult result = mockMvc
+			.perform(post("/api/v1/requests").with(TestTokens.client(clientId, TestTokens.WRITE))
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(body))
+			.andExpect(status().isCreated())
+			.andReturn();
+		return JsonPath.read(result.getResponse().getContentAsString(), "$.id");
 	}
 
 	private ResultActions perform(MockHttpServletRequestBuilder request) throws Exception {

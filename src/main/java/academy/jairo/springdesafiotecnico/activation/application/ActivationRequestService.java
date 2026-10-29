@@ -63,15 +63,17 @@ public class ActivationRequestService {
 		return new CreationResult(existing, false);
 	}
 
+	/** Solicitação de outro dono responde como inexistente: mesma exceção, mesma mensagem. */
 	@Transactional(readOnly = true)
-	public ActivationRequest findById(UUID id) {
-		return repository.findById(id).orElseThrow(() -> new ActivationRequestNotFoundException(id));
+	public ActivationRequest findById(String clientId, UUID id) {
+		return repository.findByIdAndClientId(id, clientId)
+			.orElseThrow(() -> new ActivationRequestNotFoundException(id));
 	}
 
 	@Transactional(readOnly = true)
-	public Page<ActivationRequest> findAll(@Nullable ActivationStatus status, @Nullable String customerId, int page,
-			int size) {
-		return repository.findAll(ActivationRequestSpecifications.filter(status, customerId),
+	public Page<ActivationRequest> findAll(String clientId, @Nullable ActivationStatus status,
+			@Nullable String customerId, int page, int size) {
+		return repository.findAll(ActivationRequestSpecifications.filter(clientId, status, customerId),
 				PageRequest.of(page, size, NEWEST_FIRST));
 	}
 

@@ -123,16 +123,28 @@ Os demais endpoints do Actuator (`env`, `beans`, `configprops` etc.) não são e
 
 ## API
 
-| Método e caminho | Descrição | Sucesso |
-|---|---|---|
-| `POST /api/v1/requests` | Cria uma solicitação de ativação com status `PENDING`; o envio ao provedor é assíncrono | `201` + header `Location`; `200` em retry idêntico; `409` se o `externalId` já existe com outro conteúdo |
-| `GET /api/v1/requests/{id}` | Consulta uma solicitação e seu status atual | `200` (`404` se não existir) |
-| `GET /api/v1/requests` | Lista solicitações, da mais recente para a mais antiga | `200` |
+| Método e caminho | Escopo exigido | Descrição | Sucesso |
+|---|---|---|---|
+| `POST /api/v1/requests` | `activation:write` | Cria uma solicitação de ativação com status `PENDING`; o envio ao provedor é assíncrono | `201` + header `Location`; `200` em retry idêntico; `409` se o `externalId` já existe com outro conteúdo |
+| `GET /api/v1/requests/{id}` | `activation:read` | Consulta uma solicitação do cliente e seu status atual | `200` (`404` se não existir ou for de outro cliente) |
+| `GET /api/v1/requests` | `activation:read` | Lista as solicitações do cliente, da mais recente para a mais antiga | `200` |
+
+### Autenticação e isolamento
+
+Toda chamada a `/api/v1/requests` exige `Authorization: Bearer <JWT>` (OAuth 2.0, client credentials). Sem token, ou com token inválido, a resposta é `401`; com token válido sem o escopo da operação, `403`. Um escopo não implica o outro: um cliente que cria e consulta precisa dos dois.
+
+O cliente é identificado pela claim `client_id` do token e vira o dono das solicitações que cria. Cada cliente só enxerga as próprias:
+
+- a consulta por id de uma solicitação de outro cliente responde `404`, igual a um id inexistente, para não confirmar que o id existe (OWASP API1:2023, BOLA);
+- a listagem e a contagem de `totalElements` consideram só as solicitações do cliente do token.
+
+O dono não aparece no corpo das respostas. Os exemplos abaixo usam `$TOKEN` com um access token válido.
 
 ### Criar
 
 ```bash
 curl -i -X POST localhost:8080/api/v1/requests \
+  -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"externalId":"EXT-12345","customerId":"CUST-10001","productCode":"INTERNET-500"}'
 ```
@@ -162,6 +174,7 @@ O `externalId` é único em todo o serviço (ver [Duplicidade](#duplicidade)). R
 
 ```bash
 curl -i -X POST localhost:8080/api/v1/requests \
+  -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"externalId":"EXT-12345","customerId":"CUST-10001","productCode":"INTERNET-900"}'
 ```
@@ -184,7 +197,7 @@ Content-Type: application/problem+json
 ### Consultar
 
 ```bash
-curl localhost:8080/api/v1/requests/0b5c8f1e-6a51-4a3e-9d4c-2f8e7a1b3c9d
+curl -H "Authorization: Bearer $TOKEN" localhost:8080/api/v1/requests/0b5c8f1e-6a51-4a3e-9d4c-2f8e7a1b3c9d
 ```
 
 ```json
@@ -205,7 +218,7 @@ curl localhost:8080/api/v1/requests/0b5c8f1e-6a51-4a3e-9d4c-2f8e7a1b3c9d
 ### Listar
 
 ```bash
-curl 'localhost:8080/api/v1/requests?customerId=CUST-10001&status=PENDING&page=0&size=20'
+curl -H "Authorization: Bearer $TOKEN" 'localhost:8080/api/v1/requests?customerId=CUST-10001&status=PENDING&page=0&size=20'
 ```
 
 | Parâmetro | Obrigatório | Regra |
@@ -262,7 +275,7 @@ Todo erro da API é um [Problem Details (RFC 9457)](https://www.rfc-editor.org/r
 | Corpo ilegível | `400` | `malformed-body` |
 | Token ausente, malformado ou inválido (assinatura, emissor, audiência, expiração, sem `client_id`) | `401` | `unauthorized` (com header `WWW-Authenticate: Bearer ...`) |
 | Token válido sem o escopo da operação | `403` | `forbidden` |
-| Solicitação inexistente | `404` | `not-found` |
+| Solicitação inexistente ou de outro cliente | `404` | `not-found` |
 | `externalId` já registrado com outro conteúdo | `409` | `duplicate-external-id` (com `conflictingFields`) |
 | Erro inesperado | `500` | `internal-error` |
 | Demais erros do HTTP (`405`, `415`, ...) | o do erro | `about:blank` |

@@ -36,6 +36,8 @@ class ActivationRequestRepositoryTests {
 
 	private static final String OWNER = "sistema-a";
 
+	private static final String OTHER_OWNER = "sistema-b";
+
 	private static final Instant NOW = Instant.parse("2026-01-10T12:00:00.123456789Z");
 
 	@Autowired
@@ -122,6 +124,33 @@ class ActivationRequestRepositoryTests {
 	@Test
 	void findByUnknownExternalIdIsEmpty() {
 		assertThat(repository.findByExternalId("EXT-UNKNOWN")).isEmpty();
+	}
+
+	@Test
+	void findsByIdOnlyForOwner() {
+		ActivationRequest saved = repository
+			.save(ActivationRequest.create(OWNER, "EXT-OWNED", "CUST-1", "INTERNET-500", NOW));
+
+		assertThat(repository.findByIdAndClientId(saved.getId(), OWNER)).map(ActivationRequest::getId)
+			.contains(saved.getId());
+		assertThat(repository.findByIdAndClientId(saved.getId(), OTHER_OWNER)).isEmpty();
+	}
+
+	@Test
+	void filterRestrictsToOwner() {
+		ActivationRequest first = repository
+			.save(ActivationRequest.create(OWNER, "EXT-MINE-1", "CUST-1", "INTERNET-500", NOW));
+		ActivationRequest second = repository
+			.save(ActivationRequest.create(OWNER, "EXT-MINE-2", "CUST-1", "INTERNET-500", NOW));
+		repository.save(ActivationRequest.create(OTHER_OWNER, "EXT-OTHER", "CUST-1", "INTERNET-500", NOW));
+
+		assertThat(repository.findAll(ActivationRequestSpecifications.filter(OWNER, null, null)))
+			.extracting(ActivationRequest::getId)
+			.containsExactlyInAnyOrder(first.getId(), second.getId());
+		assertThat(repository.findAll(ActivationRequestSpecifications.filter(OTHER_OWNER, ActivationStatus.PENDING,
+				"CUST-1")))
+			.extracting(ActivationRequest::getExternalId)
+			.containsExactly("EXT-OTHER");
 	}
 
 	@Test
