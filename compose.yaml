@@ -23,10 +23,13 @@ services:
       DB_URL: jdbc:postgresql://postgres:5432/ativacao
       DB_USERNAME: ativacao
       DB_PASSWORD: ativacao
+      PROVIDER_URL: http://wiremock:8080
     ports:
       - "8080:8080"
     depends_on:
       postgres:
+        condition: service_healthy
+      wiremock:
         condition: service_healthy
 
   wiremock:
