@@ -7,7 +7,7 @@
 
 ## 2. Erros 401 e 403 em Problem Details
 
-- [ ] 2.1 Extrair de `ApiExceptionHandler` o preenchimento de `instance` e `traceId` para o componente `shared/web/ProblemDetails` e tornar `ProblemTypes` público com `UNAUTHORIZED` e `FORBIDDEN` (decisão 5); verificar com `./mvnw verify` que os testes de erro existentes continuam passando sem mudança
+- [x] 2.1 Extrair de `ApiExceptionHandler` o preenchimento de `instance` e `traceId` para o componente `shared/web/ProblemDetails` e tornar `ProblemTypes` público com `UNAUTHORIZED` e `FORBIDDEN` (decisão 5); verificar com `./mvnw verify` que os testes de erro existentes continuam passando sem mudança
 - [ ] 2.2 Criar o `AuthenticationEntryPoint` e o `AccessDeniedHandler` da decisão 5 (delegando aos handlers Bearer do Spring Security e escrevendo `application/problem+json` com o `JsonMapper` do contexto) e ligá-los na `SecurityFilterChain`; acrescentar a `ApiSecurityIntegrationTests` os cenários "Corpo do 401" (`type`, `title`, `status`, `detail` fixo, `instance`, `traceId` e `WWW-Authenticate` iniciado por `Bearer`) e "Corpo do 403"; atualizar a seção "Formato de erro" do README com os dois tipos novos; verificar com `./mvnw verify`
 
 ## 3. Validação do token de ponta a ponta
