@@ -16,7 +16,7 @@
 
 ## 4. Imagem de contêiner
 
-- [ ] 4.1 Criar `.dockerignore` (`target/`, `.git/`, `.idea/`, `docs/`, `openspec/`, `.claude/`) e `Dockerfile` multi-stage conforme design (Temurin 21 Alpine, `jarmode=tools extract --layers --launcher`, usuário não-root, `MaxRAMPercentage=75.0`, `HEALTHCHECK` na readiness); verificar com `docker build -t ativacao .` e `docker run --rm --entrypoint id ativacao -u` retornando valor diferente de `0`
+- [x] 4.1 Criar `.dockerignore` (`target/`, `.git/`, `.idea/`, `docs/`, `openspec/`, `.claude/`) e `Dockerfile` multi-stage conforme design (Temurin 21 Alpine, `jarmode=tools extract --layers --launcher`, usuário não-root, `MaxRAMPercentage=75.0`, `HEALTHCHECK` na readiness); verificar com `docker build -t ativacao .` e `docker run --rm --entrypoint id ativacao -u` retornando valor diferente de `0`
 - [ ] 4.2 Documentar no README a seção "Produção": build da imagem, variáveis de ambiente obrigatórias e como ajustar a memória da JVM; verificar que os comandos citados rodam como escritos
 
 ## 5. Ambiente com Docker Compose
