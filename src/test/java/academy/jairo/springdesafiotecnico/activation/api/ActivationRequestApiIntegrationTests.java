@@ -1,9 +1,12 @@
 package academy.jairo.springdesafiotecnico.activation.api;
 
+import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
 
 import academy.jairo.springdesafiotecnico.TestcontainersConfiguration;
+import academy.jairo.springdesafiotecnico.activation.domain.ActivationRequest;
+import academy.jairo.springdesafiotecnico.activation.infrastructure.ActivationRequestRepository;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,6 +20,8 @@ import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.ResultActions;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.everyItem;
+import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.hasItems;
 import static org.hamcrest.Matchers.matchesPattern;
@@ -46,6 +51,9 @@ class ActivationRequestApiIntegrationTests {
 
 	@Autowired
 	private MockMvc mockMvc;
+
+	@Autowired
+	private ActivationRequestRepository repository;
 
 	@Test
 	void createsRequestWithValidData() throws Exception {
@@ -183,8 +191,111 @@ class ActivationRequestApiIntegrationTests {
 		assertThat(first).isNotEqualTo(second);
 	}
 
+	@Test
+	void listsOnlyRequestsOfGivenCustomer() throws Exception {
+		String customerA = uniqueCustomer("CUST-A");
+		String customerB = uniqueCustomer("CUST-B");
+		postRequest(body("EXT-A1", customerA)).andExpect(status().isCreated());
+		postRequest(body("EXT-A2", customerA)).andExpect(status().isCreated());
+		postRequest(body("EXT-B1", customerB)).andExpect(status().isCreated());
+
+		mockMvc.perform(get("/api/v1/requests").param("customerId", customerA))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.content.length()").value(2))
+			.andExpect(jsonPath("$.content[*].customerId").value(everyItem(is(customerA))))
+			.andExpect(jsonPath("$.totalElements").value(2));
+	}
+
+	@Test
+	void combinesStatusAndCustomerFilters() throws Exception {
+		String customer = uniqueCustomer("CUST-A");
+		postRequest(body("EXT-PENDING", customer)).andExpect(status().isCreated());
+		// nenhum endpoint desta change muda status: a solicitação PROCESSING é gravada direto pelo repositório
+		ActivationRequest processing = ActivationRequest.create("EXT-PROCESSING", customer, "INTERNET-500",
+				Instant.now());
+		processing.startProcessing(Instant.now());
+		repository.save(processing);
+		postRequest(body("EXT-OTHER", uniqueCustomer("CUST-B"))).andExpect(status().isCreated());
+
+		mockMvc.perform(get("/api/v1/requests").param("status", "PENDING").param("customerId", customer))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.content.length()").value(1))
+			.andExpect(jsonPath("$.content[0].externalId").value("EXT-PENDING"))
+			.andExpect(jsonPath("$.content[0].status").value("PENDING"))
+			.andExpect(jsonPath("$.content[0].customerId").value(customer));
+	}
+
+	@Test
+	void paginatesNewestFirst() throws Exception {
+		String customer = uniqueCustomer("CUST-P");
+		postRequest(body("EXT-P1", customer)).andExpect(status().isCreated());
+		postRequest(body("EXT-P2", customer)).andExpect(status().isCreated());
+		postRequest(body("EXT-P3", customer)).andExpect(status().isCreated());
+
+		mockMvc.perform(get("/api/v1/requests").param("customerId", customer).param("page", "0").param("size", "2"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.content.length()").value(2))
+			.andExpect(jsonPath("$.content[0].externalId").value("EXT-P3"))
+			.andExpect(jsonPath("$.content[1].externalId").value("EXT-P2"))
+			.andExpect(jsonPath("$.page").value(0))
+			.andExpect(jsonPath("$.size").value(2))
+			.andExpect(jsonPath("$.totalElements").value(3))
+			.andExpect(jsonPath("$.totalPages").value(2));
+	}
+
+	@Test
+	void usesDefaultPagination() throws Exception {
+		mockMvc.perform(get("/api/v1/requests").param("customerId", uniqueCustomer("CUST-EMPTY")))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.page").value(0))
+			.andExpect(jsonPath("$.size").value(20))
+			.andExpect(jsonPath("$.totalElements").value(0));
+	}
+
+	@Test
+	void rejectsUnknownStatusFilter() throws Exception {
+		expectProblem(mockMvc.perform(get("/api/v1/requests").param("status", "DONE")), 400)
+			.andExpect(jsonPath("$.type").value("https://problems.ativacao.example/invalid-parameter"));
+	}
+
+	@Test
+	void rejectsPageSizeAboveLimit() throws Exception {
+		expectProblem(mockMvc.perform(get("/api/v1/requests").param("size", "101")), 400)
+			.andExpect(jsonPath("$.type").value(VALIDATION_TYPE))
+			.andExpect(jsonPath("$.errors[*].field").value(hasItem("size")));
+	}
+
+	@Test
+	void rejectsNegativePage() throws Exception {
+		expectProblem(mockMvc.perform(get("/api/v1/requests").param("page", "-1")), 400)
+			.andExpect(jsonPath("$.type").value(VALIDATION_TYPE))
+			.andExpect(jsonPath("$.errors[*].field").value(hasItem("page")));
+	}
+
+	@Test
+	void invalidCreationIsNotPersisted() throws Exception {
+		String customer = uniqueCustomer("CUST-INVALID");
+		postRequest("""
+				{"externalId":"EXT-1","customerId":"%s","productCode":"internet 500"}""".formatted(customer))
+			.andExpect(status().isBadRequest());
+
+		mockMvc.perform(get("/api/v1/requests").param("customerId", customer))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.content.length()").value(0))
+			.andExpect(jsonPath("$.totalElements").value(0));
+	}
+
 	private ResultActions postRequest(String body) throws Exception {
 		return mockMvc.perform(post("/api/v1/requests").contentType(MediaType.APPLICATION_JSON).content(body));
+	}
+
+	private static String uniqueCustomer(String prefix) {
+		return prefix + "-" + UUID.randomUUID();
+	}
+
+	private static String body(String externalId, String customerId) {
+		return """
+				{"externalId":"%s","customerId":"%s","productCode":"INTERNET-500"}""".formatted(externalId, customerId);
 	}
 
 	private static String validBody(String externalId) {

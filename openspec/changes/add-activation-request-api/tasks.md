@@ -24,7 +24,7 @@
 
 ## 5. Listagem paginada
 
-- [ ] 5.1 Adicionar `findAll(status, customerId, page, size)` no serviço, `PageResponse` e `GET /api/v1/requests` com `@Min`/`@Max` e ordenação fixa `createdAt DESC, id DESC`; testes de integração cobrindo filtro por cliente, filtro combinado, paginação e ordenação (3 itens, `size=2`), `status=DONE` (400), `size=101` e `page=-1` (400) e criação inválida não gravada
+- [x] 5.1 Adicionar `findAll(status, customerId, page, size)` no serviço, `PageResponse` e `GET /api/v1/requests` com `@Min`/`@Max` e ordenação fixa `createdAt DESC, id DESC`; testes de integração cobrindo filtro por cliente, filtro combinado, paginação e ordenação (3 itens, `size=2`), `status=DONE` (400), `size=101` e `page=-1` (400) e criação inválida não gravada
 
 ## 6. Documentação e verificação final
 
