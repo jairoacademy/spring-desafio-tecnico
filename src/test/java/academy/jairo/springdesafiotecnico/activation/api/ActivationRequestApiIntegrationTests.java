@@ -1,6 +1,7 @@
 package academy.jairo.springdesafiotecnico.activation.api;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -20,6 +21,8 @@ import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.ResultActions;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.contains;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.everyItem;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.hasItem;
@@ -48,6 +51,8 @@ class ActivationRequestApiIntegrationTests {
 	private static final String TRACE_ID_PATTERN = "^[0-9a-f]{32}$";
 
 	private static final String VALIDATION_TYPE = "https://problems.ativacao.example/validation-error";
+
+	private static final String DUPLICATE_TYPE = "https://problems.ativacao.example/duplicate-external-id";
 
 	@Autowired
 	private MockMvc mockMvc;
@@ -283,6 +288,115 @@ class ActivationRequestApiIntegrationTests {
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.content.length()").value(0))
 			.andExpect(jsonPath("$.totalElements").value(0));
+	}
+
+	@Test
+	void identicalRetryReturnsExistingRequest() throws Exception {
+		String body = """
+				{"externalId":"EXT-RETRY","customerId":"CUST-1","productCode":"INTERNET-500"}""";
+		MvcResult created = postRequest(body).andExpect(status().isCreated()).andReturn();
+		Map<String, Object> createdBody = JsonPath.read(created.getResponse().getContentAsString(), "$");
+
+		MvcResult retried = postRequest(body).andExpect(status().isOk())
+			.andExpect(header().doesNotExist("Location"))
+			.andReturn();
+
+		Map<String, Object> retriedBody = JsonPath.read(retried.getResponse().getContentAsString(), "$");
+		assertThat(retriedBody).isEqualTo(createdBody);
+		assertThat(requestsWithExternalId("EXT-RETRY")).hasSize(1);
+	}
+
+	@Test
+	void retryReturnsCurrentStatus() throws Exception {
+		String body = """
+				{"externalId":"EXT-RETRY-2","customerId":"CUST-1","productCode":"INTERNET-500"}""";
+		postRequest(body).andExpect(status().isCreated());
+		// nenhum endpoint desta change muda status: a transição é gravada direto pelo repositório
+		ActivationRequest stored = repository.findByExternalId("EXT-RETRY-2").orElseThrow();
+		stored.startProcessing(Instant.now());
+		repository.save(stored);
+
+		postRequest(body).andExpect(status().isOk())
+			.andExpect(jsonPath("$.id").value(stored.getId().toString()))
+			.andExpect(jsonPath("$.status").value("PROCESSING"));
+	}
+
+	@Test
+	void divergentProductCodeIsConflict() throws Exception {
+		postRequest("""
+				{"externalId":"EXT-CONF","customerId":"CUST-1","productCode":"INTERNET-500"}""")
+			.andExpect(status().isCreated());
+
+		expectProblem(postRequest("""
+				{"externalId":"EXT-CONF","customerId":"CUST-1","productCode":"INTERNET-900"}"""), 409)
+			.andExpect(jsonPath("$.type").value(DUPLICATE_TYPE))
+			.andExpect(jsonPath("$.title").value("Solicitação duplicada"))
+			.andExpect(jsonPath("$.detail").value(containsString("EXT-CONF")))
+			.andExpect(jsonPath("$.conflictingFields").value(contains("productCode")))
+			.andExpect(jsonPath("$.id").doesNotExist())
+			.andExpect(jsonPath("$.customerId").doesNotExist())
+			.andExpect(jsonPath("$.productCode").doesNotExist());
+	}
+
+	@Test
+	void reportsEveryDivergentField() throws Exception {
+		postRequest("""
+				{"externalId":"EXT-CONF-2","customerId":"CUST-1","productCode":"INTERNET-500"}""")
+			.andExpect(status().isCreated());
+
+		expectProblem(postRequest("""
+				{"externalId":"EXT-CONF-2","customerId":"CUST-2","productCode":"INTERNET-900"}"""), 409)
+			.andExpect(jsonPath("$.type").value(DUPLICATE_TYPE))
+			.andExpect(jsonPath("$.conflictingFields").value(contains("customerId", "productCode")));
+	}
+
+	@Test
+	void sameExternalIdFromAnotherCustomerIsConflict() throws Exception {
+		postRequest("""
+				{"externalId":"EXT-DUP-2","customerId":"CUST-A","productCode":"INTERNET-500"}""")
+			.andExpect(status().isCreated());
+
+		expectProblem(postRequest("""
+				{"externalId":"EXT-DUP-2","customerId":"CUST-B","productCode":"INTERNET-500"}"""), 409)
+			.andExpect(jsonPath("$.conflictingFields").value(contains("customerId")));
+
+		assertThat(requestsWithExternalId("EXT-DUP-2")).singleElement()
+			.extracting(ActivationRequest::getCustomerId)
+			.isEqualTo("CUST-A");
+	}
+
+	@Test
+	void conflictDoesNotChangeExistingRequest() throws Exception {
+		MvcResult created = postRequest("""
+				{"externalId":"EXT-CONF-3","customerId":"CUST-1","productCode":"INTERNET-500"}""")
+			.andExpect(status().isCreated())
+			.andReturn();
+		Map<String, Object> createdBody = JsonPath.read(created.getResponse().getContentAsString(), "$");
+		postRequest("""
+				{"externalId":"EXT-CONF-3","customerId":"CUST-2","productCode":"INTERNET-900"}""")
+			.andExpect(status().isConflict());
+
+		MvcResult fetched = mockMvc.perform(get(created.getResponse().getHeader("Location")))
+			.andExpect(status().isOk())
+			.andReturn();
+
+		Map<String, Object> fetchedBody = JsonPath.read(fetched.getResponse().getContentAsString(), "$");
+		assertThat(fetchedBody).isEqualTo(createdBody);
+	}
+
+	@Test
+	void externalIdDifferingOnlyInCaseCreatesAnotherRequest() throws Exception {
+		postRequest(validBody("EXT-CASE")).andExpect(status().isCreated());
+
+		postRequest(validBody("ext-case")).andExpect(status().isCreated())
+			.andExpect(jsonPath("$.externalId").value("ext-case"));
+
+		assertThat(requestsWithExternalId("EXT-CASE")).hasSize(1);
+		assertThat(requestsWithExternalId("ext-case")).hasSize(1);
+	}
+
+	private List<ActivationRequest> requestsWithExternalId(String externalId) {
+		return repository.findAll().stream().filter(request -> request.getExternalId().equals(externalId)).toList();
 	}
 
 	private ResultActions postRequest(String body) throws Exception {

@@ -4,6 +4,7 @@ import java.net.URI;
 import java.util.List;
 import java.util.Map;
 
+import academy.jairo.springdesafiotecnico.activation.application.ActivationRequestConflictException;
 import academy.jairo.springdesafiotecnico.activation.application.ActivationRequestNotFoundException;
 import io.micrometer.tracing.Span;
 import io.micrometer.tracing.Tracer;
@@ -92,6 +93,16 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 		ProblemDetail problem = problem(HttpStatus.NOT_FOUND, ProblemTypes.NOT_FOUND, "Solicitação não encontrada",
 				"Não existe solicitação com id " + ex.getId() + ".");
 		return handleExceptionInternal(ex, problem, new HttpHeaders(), HttpStatus.NOT_FOUND, request);
+	}
+
+	@ExceptionHandler(ActivationRequestConflictException.class)
+	@Nullable ResponseEntity<Object> handleConflict(ActivationRequestConflictException ex, WebRequest request) {
+		// sem id nem valores do registro existente: só quem o criou deve lê-lo
+		ProblemDetail problem = problem(HttpStatus.CONFLICT, ProblemTypes.DUPLICATE_EXTERNAL_ID,
+				"Solicitação duplicada",
+				"Já existe solicitação com externalId " + ex.getExternalId() + " e conteúdo diferente.");
+		problem.setProperty("conflictingFields", ex.getConflictingFields());
+		return handleExceptionInternal(ex, problem, new HttpHeaders(), HttpStatus.CONFLICT, request);
 	}
 
 	@ExceptionHandler(Exception.class)

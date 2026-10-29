@@ -15,6 +15,8 @@ final class ProblemTypes {
 
 	static final URI NOT_FOUND = URI.create(BASE + "not-found");
 
+	static final URI DUPLICATE_EXTERNAL_ID = URI.create(BASE + "duplicate-external-id");
+
 	static final URI INTERNAL_ERROR = URI.create(BASE + "internal-error");
 
 	static final URI ABOUT_BLANK = URI.create("about:blank");
