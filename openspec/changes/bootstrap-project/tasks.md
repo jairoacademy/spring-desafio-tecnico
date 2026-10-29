@@ -4,7 +4,7 @@
 
 - [x] 1.1 Confirmar na documentação do Boot 4.1 os nomes de `spring-boot-starter-actuator` e do starter de teste correspondente, adicioná-los ao `pom.xml` e verificar com `./mvnw -q dependency:tree` que resolvem
 - [x] 1.2 Configurar em `application.properties` `management.endpoint.health.probes.enabled=true` e `management.endpoints.web.exposure.include=health`; criar teste de integração (`@SpringBootTest` + `@AutoConfigureMockMvc` + `TestcontainersConfiguration`) que verifica `200`/`UP` em `/actuator/health/liveness` e `/actuator/health/readiness` e `404` em `/actuator/env`; verificar com `./mvnw verify`
-- [ ] 1.3 Documentar no README os endpoints de health e verificar que os caminhos citados batem com os do teste
+- [x] 1.3 Documentar no README os endpoints de health e verificar que os caminhos citados batem com os do teste
 
 ## 2. Null-safety
 

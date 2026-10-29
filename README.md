@@ -35,3 +35,18 @@ Os testes sobem o próprio PostgreSQL via Testcontainers e não dependem do `com
 | `DB_PASSWORD` | Senha do banco |
 
 O `application.properties` não tem valores padrão: sem essas variáveis, a aplicação não sobe. As credenciais do `compose.yaml` e do `application-local.properties` são apenas para desenvolvimento local. Em produção, os valores vêm de variáveis de ambiente injetadas por um gerenciador de segredos.
+
+### Health checks
+
+O Actuator expõe apenas o endpoint `health`, com as probes habilitadas:
+
+| Endpoint | Uso |
+|---|---|
+| `GET /actuator/health/liveness` | A aplicação está viva. Não depende do banco nem do provedor externo, para que uma falha deles não reinicie a aplicação. |
+| `GET /actuator/health/readiness` | A aplicação está pronta para receber tráfego. |
+
+```bash
+curl localhost:8080/actuator/health/readiness
+```
+
+Os demais endpoints do Actuator (`env`, `beans`, `configprops` etc.) não são expostos via HTTP.
