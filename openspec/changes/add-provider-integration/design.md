@@ -66,7 +66,7 @@ spring.http.serviceclient.provider.base-url=${PROVIDER_URL}
 spring.http.serviceclient.provider.connect-timeout=${PROVIDER_CONNECT_TIMEOUT:2s}
 spring.http.serviceclient.provider.read-timeout=${PROVIDER_READ_TIMEOUT:5s}
 ```
-Sem Apache, Jetty nem Reactor no classpath, o Boot usa o `HttpClient` do JDK, o que basta. `ActivationPayload(externalId, customerId, productCode)` é um record. O contrato do provedor não é definido no enunciado; o corpo com esses três campos é uma suposição registrada no README.
+Sem Apache, Jetty nem Reactor no classpath, o Boot usa o `HttpClient` do JDK, o que basta. O `HttpClient` do JDK usa HTTP/2 por padrão e, em `http://`, tenta o upgrade h2c, que o WireMock recusa encerrando a conexão; um `ClientHttpRequestFactoryBuilderCustomizer<JdkClientHttpRequestFactoryBuilder>` fixa HTTP/1.1. `ActivationPayload(externalId, customerId, productCode)` é um record. O contrato do provedor não é definido no enunciado; o corpo com esses três campos é uma suposição registrada no README.
 
 **6. Classificação do retorno em `ProviderGateway`.**
 Um adaptador em `infrastructure/provider` chama o `ProviderClient` e converte o resultado em `ProviderOutcome`, uma interface selada:

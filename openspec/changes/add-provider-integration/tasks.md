@@ -13,8 +13,8 @@
 
 ## 3. Cliente do provedor
 
-- [ ] 3.1 Adicionar `spring-boot-starter-restclient` ao `pom.xml`, e `wiremock-standalone` 3.13.2 e `awaitility` em escopo de teste (design, decisão 14); criar `ProviderClient` (`@HttpExchange`), `ActivationPayload` e o registro com `@ImportHttpServices(group = "provider")`; propriedades `spring.http.serviceclient.provider.*` com `${PROVIDER_URL}` e timeouts em `application.properties` e `http://localhost:8089` em `application-local.properties`; verificar com `./mvnw verify` que o contexto sobe
-- [ ] 3.2 Criar `ProviderOutcome` (selado) e `ProviderGateway` com a classificação da decisão 6, incluindo o `Retry-After` em segundos e em data HTTP; `ProviderGatewayIntegrationTests` com `WireMockExtension` em porta dinâmica cobrindo `200`, `400`, `404`, `500`, `408`, timeout com read timeout de 500 ms, `Fault.CONNECTION_RESET_BY_PEER`, `429` com `Retry-After: 120`, `503` com data HTTP, `429` sem header e `Retry-After` inválido; `verify` do corpo JSON e do header `Idempotency-Key`
+- [x] 3.1 Adicionar `spring-boot-starter-restclient` ao `pom.xml`, e `wiremock-standalone` 3.13.2 e `awaitility` em escopo de teste (design, decisão 14); criar `ProviderClient` (`@HttpExchange`), `ActivationPayload` e o registro com `@ImportHttpServices(group = "provider")`; propriedades `spring.http.serviceclient.provider.*` com `${PROVIDER_URL}` e timeouts em `application.properties` e `http://localhost:8089` em `application-local.properties`; verificar com `./mvnw verify` que o contexto sobe
+- [x] 3.2 Criar `ProviderOutcome` (selado) e `ProviderGateway` com a classificação da decisão 6, incluindo o `Retry-After` em segundos e em data HTTP; `ProviderGatewayIntegrationTests` com `WireMockExtension` em porta dinâmica cobrindo `200`, `400`, `404`, `500`, `408`, timeout com read timeout de 500 ms, `Fault.CONNECTION_RESET_BY_PEER`, `429` com `Retry-After: 120`, `503` com data HTTP, `429` sem header e `Retry-After` inválido; `verify` do corpo JSON e do header `Idempotency-Key`
 
 ## 4. Worker
 
