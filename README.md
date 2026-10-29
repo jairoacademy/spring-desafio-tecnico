@@ -51,3 +51,39 @@ curl localhost:8080/actuator/health/readiness
 ```
 
 Os demais endpoints do Actuator (`env`, `beans`, `configprops` etc.) não são expostos via HTTP.
+
+## Produção
+
+### Imagem de contêiner
+
+O `Dockerfile` é multi-stage: compila com JDK, separa o jar em camadas (`jarmode=tools`) e gera uma imagem final só com JRE, executada com usuário não-root. Os testes não rodam no build da imagem; eles rodam no `./mvnw verify` do CI.
+
+```bash
+docker build -t ativacao .
+docker run --rm -p 8080:8080 \
+  -e DB_URL=jdbc:postgresql://<host>:5432/ativacao \
+  -e DB_USERNAME=<usuario> \
+  -e DB_PASSWORD=<senha> \
+  ativacao
+```
+
+A imagem tem `HEALTHCHECK` em `/actuator/health/readiness`.
+
+### Variáveis de ambiente obrigatórias
+
+| Variável | Descrição |
+|---|---|
+| `DB_URL` | URL JDBC do PostgreSQL |
+| `DB_USERNAME` | Usuário do banco |
+| `DB_PASSWORD` | Senha do banco |
+
+### Memória da JVM
+
+A imagem define `JAVA_TOOL_OPTIONS=-XX:MaxRAMPercentage=75.0`: o heap usa até 75% da memória do contêiner, e o restante fica para metaspace, threads e buffers. Para ajustar, sobrescreva a variável:
+
+```bash
+docker run --rm -p 8080:8080 --memory=512m \
+  -e JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=60.0" \
+  -e DB_URL=... -e DB_USERNAME=... -e DB_PASSWORD=... \
+  ativacao
+```
