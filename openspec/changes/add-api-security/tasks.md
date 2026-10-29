@@ -28,7 +28,7 @@
 
 ## 6. Decisões e verificação final
 
-- [ ] 6.1 Escrever `docs/adr/0004-seguranca-da-api.md` (client credentials, validação do JWT por JWKS, escopos, `client_id` como dono, BOLA com `404`, `409` sem detalhes entre donos) e acrescentar ao ADR 0001 a referência à regra entre donos; atualizar o README com a seção de segurança nas "Decisões técnicas": fluxo client credentials, o que o serviço valida no JWT e de onde vêm as chaves, escopos, armazenamento e rotação da credencial do provedor (decisão 12) e limites de corpo e de taxa como evolução (decisão 13); rodar `./mvnw verify` e verificar que passa
+- [x] 6.1 Escrever `docs/adr/0004-seguranca-da-api.md` (client credentials, validação do JWT por JWKS, escopos, `client_id` como dono, BOLA com `404`, `409` sem detalhes entre donos) e acrescentar ao ADR 0001 a referência à regra entre donos; atualizar o README com a seção de segurança nas "Decisões técnicas": fluxo client credentials, o que o serviço valida no JWT e de onde vêm as chaves, escopos, armazenamento e rotação da credencial do provedor (decisão 12) e limites de corpo e de taxa como evolução (decisão 13); rodar `./mvnw verify` e verificar que passa
 
 ## Workflow follow-up
 

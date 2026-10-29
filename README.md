@@ -367,9 +367,40 @@ O corpo da resposta não é lido; só o status e o header `Retry-After` importam
 
 Circuit breaker não foi implementado: o `batch-size` por rodada e o backoff já limitam a pressão sobre um provedor fora do ar. Fica como evolução no ADR 0003.
 
+### Segurança
+
+Decisões registradas no [ADR 0004](docs/adr/0004-seguranca-da-api.md).
+
+**Fluxo client credentials.** Os consumidores são sistemas, sem usuário humano. Cada sistema tem `client_id` e segredo (ou chave privada, com `private_key_jwt`) no servidor de autorização:
+
+1. o sistema chama `POST /token` do servidor de autorização com `grant_type=client_credentials`, as próprias credenciais e os escopos desejados;
+2. o servidor devolve um access token JWT de vida curta (minutos), assinado com a chave privada dele, com `iss`, `aud`, `exp`, `client_id` e `scope`;
+3. o sistema chama a API com `Authorization: Bearer <token>` e reaproveita o token até perto de expirar;
+4. a API valida o token sozinha, com a chave pública, sem chamar o servidor de autorização a cada requisição.
+
+**O que a API valida no JWT.** Assinatura por uma chave do JWKS em `JWT_JWK_SET_URI`; `iss` igual a `JWT_ISSUER_URI`; `aud` contendo `JWT_AUDIENCE`; `exp` e `nbf` com 60 s de tolerância de relógio; claim `client_id` presente, não vazia e com até 255 caracteres. Qualquer falha resulta em `401`. O decoder é o do Spring Boot (Resource Server), configurado só por propriedades, e o validador de `client_id` entra na mesma cadeia.
+
+**De onde vêm as chaves.** Do endpoint JWKS do servidor de autorização. As chaves são buscadas na primeira requisição autenticada, ficam em cache e são buscadas de novo quando chega um `kid` desconhecido: a rotação de chaves do servidor de autorização não exige deploy, desde que ele publique a chave nova antes de começar a assinar com ela. A aplicação não depende do servidor de autorização para subir. Usar `jwk-set-uri`, e não só `issuer-uri` com descoberta OIDC, permite buscar as chaves por um endereço interno diferente do `iss` (é o caso do `compose.yaml`).
+
+**Escopos.** `activation:write` para criar e `activation:read` para consultar e listar ([tabela da API](#api)). Um não implica o outro, e cada cliente recebe só o que usa. Token válido sem o escopo da operação: `403`. As respostas `401` e `403` saem em ProblemDetail com `traceId`, como os demais erros.
+
+**Isolamento entre clientes.** A claim `client_id` é o dono da solicitação. A consulta e a listagem filtram pelo dono na própria consulta ao banco; a solicitação de outro cliente responde `404`, indistinguível de um id inexistente (BOLA). Na criação, `externalId` de outro cliente é `409` sem detalhes ([Duplicidade](#duplicidade)).
+
+**Credencial do provedor externo: armazenamento e rotação.** Hoje o provedor não exige autenticação (o enunciado não define credenciais). Em produção:
+
+- *Armazenamento:* o segredo fica em um cofre (AWS Secrets Manager, Azure Key Vault, HashiCorp Vault), lido na subida pela integração do Spring Cloud com o cofre ou injetado como variável pelo orquestrador (Kubernetes Secret alimentado pelo External Secrets Operator). Nunca no repositório, na imagem ou em log.
+- *Preferência por OAuth 2.0 client credentials também na saída:* a aplicação obtém um token de vida curta para o provedor com `spring-boot-starter-security-oauth2-client` e o `OAuth2ClientHttpRequestInterceptor` no `RestClient`. O segredo de longa duração fica só entre a aplicação e o servidor de autorização; melhor ainda com `private_key_jwt` ou mTLS, em que não há segredo compartilhado.
+- *Rotação sem parada:* o cofre gera a credencial nova enquanto a antiga continua válida; a aplicação passa a usar a nova (releitura periódica ou novo deploy); a antiga é revogada depois de uma janela maior que o ciclo de releitura. Com chave de API simples, o provedor precisa aceitar duas chaves ativas durante a janela.
+- *Falha de autenticação no provedor:* hoje um `401`/`403` do provedor vira `PROVIDER_REJECTED`. Com credencial real, deveria virar alerta operacional, e não falha definitiva da solicitação.
+
+**Limites de corpo e de taxa (evolução, não implementados).**
+
+- *Corpo:* o payload válido tem menos de 300 bytes. O limite fica no gateway ou ingress (ex.: `client_max_body_size 16k` no NGINX), ou na aplicação com um filtro que rejeita `Content-Length` acima de 16 KB com `413`.
+- *Taxa:* por `client_id`, no API gateway, onde o estado é compartilhado entre instâncias, ou com Bucket4j e Redis na aplicação, respondendo `429` com `Retry-After`. Limite em memória por instância não funciona com várias réplicas.
+
 ### Duplicidade
 
-Decisão registrada no [ADR 0001](docs/adr/0001-unicidade-external-id.md).
+Decisões registradas nos ADRs [0001](docs/adr/0001-unicidade-external-id.md) e [0004](docs/adr/0004-seguranca-da-api.md) (regra entre clientes).
 
 O `externalId` é único em todo o serviço, de qualquer cliente, e a comparação diferencia maiúsculas de minúsculas. Quem garante é o banco, com a constraint `uq_activation_request_external_id UNIQUE (external_id)` (migração `V2`).
 
