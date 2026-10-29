@@ -441,6 +441,66 @@ class ActivationRequestApiIntegrationTests {
 	}
 
 	@Test
+	void sameContentFromAnotherClientIsConflictWithoutDetails() throws Exception {
+		String body = """
+				{"externalId":"EXT-OWNER","customerId":"CUST-1","productCode":"INTERNET-500"}""";
+		createAs("sistema-a", body);
+
+		MvcResult conflict = expectProblem(postAs("sistema-b", body), 409)
+			.andExpect(jsonPath("$.type").value(DUPLICATE_TYPE))
+			.andExpect(jsonPath("$.conflictingFields").doesNotExist())
+			.andExpect(jsonPath("$.id").doesNotExist())
+			.andReturn();
+
+		assertThat(conflict.getResponse().getContentAsString()).doesNotContain("CUST-1", "INTERNET-500", "sistema-a",
+				"PENDING");
+	}
+
+	@Test
+	void differentContentFromAnotherClientIsSameConflictWithoutDetails() throws Exception {
+		createAs("sistema-a", """
+				{"externalId":"EXT-OWNER-2","customerId":"CUST-1","productCode":"INTERNET-500"}""");
+
+		MvcResult identical = expectProblem(postAs("sistema-b", """
+				{"externalId":"EXT-OWNER-2","customerId":"CUST-1","productCode":"INTERNET-500"}"""), 409).andReturn();
+		MvcResult divergent = expectProblem(postAs("sistema-b", """
+				{"externalId":"EXT-OWNER-2","customerId":"CUST-1","productCode":"INTERNET-900"}"""), 409)
+			.andExpect(jsonPath("$.conflictingFields").doesNotExist())
+			.andReturn();
+
+		Map<String, Object> identicalBody = JsonPath.read(identical.getResponse().getContentAsString(), "$");
+		Map<String, Object> divergentBody = JsonPath.read(divergent.getResponse().getContentAsString(), "$");
+		identicalBody.remove("traceId");
+		divergentBody.remove("traceId");
+		assertThat(divergentBody).isEqualTo(identicalBody);
+	}
+
+	@Test
+	void conflictFromAnotherClientDoesNotChangeOwnersRequest() throws Exception {
+		String id = createAs("sistema-a", """
+				{"externalId":"EXT-OWNER-3","customerId":"CUST-1","productCode":"INTERNET-500"}""");
+		MvcResult before = mockMvc
+			.perform(get("/api/v1/requests/{id}", id).with(TestTokens.client("sistema-a", TestTokens.READ)))
+			.andExpect(status().isOk())
+			.andReturn();
+
+		postAs("sistema-b", """
+				{"externalId":"EXT-OWNER-3","customerId":"CUST-2","productCode":"INTERNET-900"}""")
+			.andExpect(status().isConflict());
+
+		MvcResult after = mockMvc
+			.perform(get("/api/v1/requests/{id}", id).with(TestTokens.client("sistema-a", TestTokens.READ)))
+			.andExpect(status().isOk())
+			.andReturn();
+		Map<String, Object> beforeBody = JsonPath.read(before.getResponse().getContentAsString(), "$");
+		Map<String, Object> afterBody = JsonPath.read(after.getResponse().getContentAsString(), "$");
+		assertThat(afterBody).isEqualTo(beforeBody);
+		assertThat(repository.findByExternalId("EXT-OWNER-3")).get()
+			.extracting(ActivationRequest::getClientId)
+			.isEqualTo("sistema-a");
+	}
+
+	@Test
 	void conflictDoesNotChangeExistingRequest() throws Exception {
 		MvcResult created = postRequest("""
 				{"externalId":"EXT-CONF-3","customerId":"CUST-1","productCode":"INTERNET-500"}""")
@@ -480,13 +540,14 @@ class ActivationRequestApiIntegrationTests {
 
 	/** Cria como {@code clientId} e devolve o {@code id}. */
 	private String createAs(String clientId, String body) throws Exception {
-		MvcResult result = mockMvc
-			.perform(post("/api/v1/requests").with(TestTokens.client(clientId, TestTokens.WRITE))
-				.contentType(MediaType.APPLICATION_JSON)
-				.content(body))
-			.andExpect(status().isCreated())
-			.andReturn();
+		MvcResult result = postAs(clientId, body).andExpect(status().isCreated()).andReturn();
 		return JsonPath.read(result.getResponse().getContentAsString(), "$.id");
+	}
+
+	private ResultActions postAs(String clientId, String body) throws Exception {
+		return mockMvc.perform(post("/api/v1/requests").with(TestTokens.client(clientId, TestTokens.WRITE))
+			.contentType(MediaType.APPLICATION_JSON)
+			.content(body));
 	}
 
 	private ResultActions perform(MockHttpServletRequestBuilder request) throws Exception {

@@ -96,10 +96,15 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 	@ExceptionHandler(ActivationRequestConflictException.class)
 	@Nullable ResponseEntity<Object> handleConflict(ActivationRequestConflictException ex, WebRequest request) {
 		// sem id nem valores do registro existente: só quem o criou deve lê-lo
+		List<String> conflictingFields = ex.getConflictingFields();
+		// lista vazia: externalId de outro cliente, sem nada que revele o registro dele
+		String detail = conflictingFields.isEmpty() ? "O externalId " + ex.getExternalId() + " já está em uso."
+				: "Já existe solicitação com externalId " + ex.getExternalId() + " e conteúdo diferente.";
 		ProblemDetail problem = problem(HttpStatus.CONFLICT, ProblemTypes.DUPLICATE_EXTERNAL_ID,
-				"Solicitação duplicada",
-				"Já existe solicitação com externalId " + ex.getExternalId() + " e conteúdo diferente.");
-		problem.setProperty("conflictingFields", ex.getConflictingFields());
+				"Solicitação duplicada", detail);
+		if (!conflictingFields.isEmpty()) {
+			problem.setProperty("conflictingFields", conflictingFields);
+		}
 		return handleExceptionInternal(ex, problem, new HttpHeaders(), HttpStatus.CONFLICT, request);
 	}
 

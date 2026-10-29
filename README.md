@@ -170,7 +170,7 @@ Datas são ISO-8601 em UTC (sufixo `Z`), com precisão de microssegundos.
 
 A resposta sai sem esperar o provedor. Depois, o `status` muda sozinho (ver [Integração com o provedor](#integração-com-o-provedor)): em poucos segundos, com o provedor respondendo, a solicitação chega a `COMPLETED` ou `FAILED`.
 
-O `externalId` é único em todo o serviço (ver [Duplicidade](#duplicidade)). Repetir o mesmo corpo devolve `200` com o registro existente, no status atual, sem header `Location`. O mesmo `externalId` com `customerId` ou `productCode` diferente devolve `409`:
+O `externalId` é único em todo o serviço (ver [Duplicidade](#duplicidade)). Repetir o mesmo corpo, com o mesmo cliente, devolve `200` com o registro existente, no status atual, sem header `Location`. O mesmo `externalId` com `customerId` ou `productCode` diferente devolve `409`; se o `externalId` é de outro cliente, o `409` vem sem `conflictingFields`:
 
 ```bash
 curl -i -X POST localhost:8080/api/v1/requests \
@@ -276,7 +276,7 @@ Todo erro da API é um [Problem Details (RFC 9457)](https://www.rfc-editor.org/r
 | Token ausente, malformado ou inválido (assinatura, emissor, audiência, expiração, sem `client_id`) | `401` | `unauthorized` (com header `WWW-Authenticate: Bearer ...`) |
 | Token válido sem o escopo da operação | `403` | `forbidden` |
 | Solicitação inexistente ou de outro cliente | `404` | `not-found` |
-| `externalId` já registrado com outro conteúdo | `409` | `duplicate-external-id` (com `conflictingFields`) |
+| `externalId` já registrado com outro conteúdo (com `conflictingFields`) ou por outro cliente (sem `conflictingFields`) | `409` | `duplicate-external-id` |
 | Erro inesperado | `500` | `internal-error` |
 | Demais erros do HTTP (`405`, `415`, ...) | o do erro | `about:blank` |
 
@@ -350,6 +350,8 @@ Decisão registrada no [ADR 0001](docs/adr/0001-unicidade-external-id.md).
 
 O `externalId` é único em todo o serviço, de qualquer cliente, e a comparação diferencia maiúsculas de minúsculas. Quem garante é o banco, com a constraint `uq_activation_request_external_id UNIQUE (external_id)` (migração `V2`).
 
+O retry idêntico (`200`) e os `conflictingFields` só valem entre solicitações do mesmo cliente (`client_id` do token). Se o `externalId` é de outro cliente, a criação compara o dono antes do conteúdo e responde sempre o mesmo `409` sem detalhes: devolver o registro vazaria `id` e status, e os campos divergentes funcionariam como oráculo, permitindo descobrir por tentativa o `customerId` e o `productCode` alheios. O caminho da corrida (violação seguida de releitura) passa pela mesma regra.
+
 Verificar se o `externalId` existe e depois inserir não basta. No `READ COMMITTED` do PostgreSQL, duas requisições podem fazer o `SELECT` antes de qualquer uma confirmar o `INSERT`:
 
 ```
@@ -371,6 +373,7 @@ O serviço não abre transação própria na criação: no PostgreSQL, depois de
 |---|---|
 | Mesmo `externalId`, mesmo conteúdo (retry legítimo) | `200` com o registro existente e o status atual. O sistema de origem não sabe se a primeira chamada chegou; recebe `id` e status sem tratamento especial. Nenhum registro é criado ou alterado. |
 | Mesmo `externalId`, conteúdo diferente | `409` com `conflictingFields` (ex.: `["productCode"]`). Exige ação humana. A resposta não traz `id` nem valores do registro existente. |
+| `externalId` já registrado por **outro cliente**, com qualquer conteúdo | `409` sem `conflictingFields`, com `detail` "O externalId ... já está em uso.". Nenhum registro é criado ou alterado. |
 | Duas requisições idênticas em paralelo | Uma recebe `201`; as outras caem na violação, releem e recebem `200` com o mesmo `id`. |
 
 O teste `ActivationRequestConcurrencyIntegrationTests` dispara 10 criações simultâneas com o mesmo `externalId` contra o PostgreSQL do Testcontainers e verifica exatamente um registro, um único `created` e o mesmo `id` em todos os resultados.

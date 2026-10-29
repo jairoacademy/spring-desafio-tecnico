@@ -41,7 +41,7 @@ public class ActivationRequestService {
 	public CreationResult create(String clientId, String externalId, String customerId, String productCode) {
 		Optional<ActivationRequest> existing = repository.findByExternalId(externalId);
 		if (existing.isPresent()) {
-			return resolveExisting(existing.get(), customerId, productCode);
+			return resolveExisting(existing.get(), clientId, customerId, productCode);
 		}
 		try {
 			ActivationRequest saved = repository
@@ -51,11 +51,19 @@ public class ActivationRequestService {
 		catch (DataIntegrityViolationException ex) {
 			// corrida com outra criação do mesmo externalId; sem registro, a violação foi outra
 			ActivationRequest winner = repository.findByExternalId(externalId).orElseThrow(() -> ex);
-			return resolveExisting(winner, customerId, productCode);
+			return resolveExisting(winner, clientId, customerId, productCode);
 		}
 	}
 
-	private static CreationResult resolveExisting(ActivationRequest existing, String customerId, String productCode) {
+	/**
+	 * Dono antes do conteúdo: o registro de outro cliente é sempre conflito sem detalhes. Devolver o registro
+	 * vazaria id e status, e os campos divergentes permitiriam descobrir o conteúdo por tentativa (ADR 0004).
+	 */
+	private static CreationResult resolveExisting(ActivationRequest existing, String clientId, String customerId,
+			String productCode) {
+		if (!existing.getClientId().equals(clientId)) {
+			throw ActivationRequestConflictException.ownedByAnotherClient(existing.getExternalId());
+		}
 		List<String> conflictingFields = existing.conflictingFields(customerId, productCode);
 		if (!conflictingFields.isEmpty()) {
 			throw new ActivationRequestConflictException(existing.getExternalId(), conflictingFields);
