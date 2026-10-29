@@ -46,7 +46,7 @@ docker compose up -d postgres wiremock
 ./mvnw spring-boot:run -Dspring-boot.run.profiles=local
 ```
 
-No IntelliJ, informe `local` em **Active profiles** na Run Configuration. O perfil `local` aponta para o PostgreSQL (`localhost:5432`) e o mock do provedor (`localhost:8089`) do `compose.yaml`.
+No IntelliJ, informe `local` em **Active profiles** na Run Configuration. O perfil `local` aponta para o PostgreSQL (`localhost:5432`), o mock do provedor (`localhost:8089`) e o emissor de tokens (`localhost:8091`, JWKS em `/default/jwks`, emissor `http://localhost:8091/default`, audiência `ativacao-api`) do `compose.yaml`.
 
 ### Testes
 
@@ -73,6 +73,18 @@ Coleção [Bruno](https://www.usebruno.com/) em [`bruno/`](bruno/). Abra a pasta
 | `DB_PASSWORD` | Senha do banco |
 
 O `application.properties` não tem valores padrão: sem essas variáveis, a aplicação não sobe. As credenciais do `compose.yaml` e do `application-local.properties` são apenas para desenvolvimento local. Em produção, os valores vêm de variáveis de ambiente injetadas por um gerenciador de segredos.
+
+### Configuração da autenticação
+
+A API é um OAuth 2.0 Resource Server: aceita só JWT assinado por uma chave do JWKS configurado, com o emissor e a audiência configurados.
+
+| Variável | Descrição |
+|---|---|
+| `JWT_JWK_SET_URI` | URL do JWKS (chaves públicas) do servidor de autorização |
+| `JWT_ISSUER_URI` | Valor exigido na claim `iss` |
+| `JWT_AUDIENCE` | Valor exigido na claim `aud` |
+
+As três são obrigatórias: sem elas, a aplicação não sobe. As chaves são buscadas no primeiro uso, não na subida.
 
 ### Configuração do provedor e do envio
 
@@ -382,6 +394,9 @@ docker run --rm -p 8080:8080 \
   -e DB_USERNAME=<usuario> \
   -e DB_PASSWORD=<senha> \
   -e PROVIDER_URL=https://<provedor> \
+  -e JWT_JWK_SET_URI=https://<servidor-de-autorizacao>/jwks \
+  -e JWT_ISSUER_URI=https://<servidor-de-autorizacao> \
+  -e JWT_AUDIENCE=ativacao-api \
   ativacao
 ```
 
@@ -395,6 +410,9 @@ A imagem tem `HEALTHCHECK` em `/actuator/health/readiness`.
 | `DB_USERNAME` | Usuário do banco |
 | `DB_PASSWORD` | Senha do banco |
 | `PROVIDER_URL` | Base URL do provedor externo |
+| `JWT_JWK_SET_URI` | URL do JWKS do servidor de autorização |
+| `JWT_ISSUER_URI` | Emissor exigido no JWT (`iss`) |
+| `JWT_AUDIENCE` | Audiência exigida no JWT (`aud`) |
 
 Demais ajustes do provedor e do envio em [Configuração do provedor e do envio](#configuração-do-provedor-e-do-envio).
 
@@ -405,6 +423,7 @@ A imagem define `JAVA_TOOL_OPTIONS=-XX:MaxRAMPercentage=75.0`: o heap usa até 7
 ```bash
 docker run --rm -p 8080:8080 --memory=512m \
   -e JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=60.0" \
-  -e DB_URL=... -e DB_USERNAME=... -e DB_PASSWORD=... -e PROVIDER_URL=... \
+  -e DB_URL=... -e DB_USERNAME=... -e DB_PASSWORD=... -e PROVIDER_URL=... -e JWT_JWK_SET_URI=... \
+  -e JWT_ISSUER_URI=... -e JWT_AUDIENCE=... \
   ativacao
 ```

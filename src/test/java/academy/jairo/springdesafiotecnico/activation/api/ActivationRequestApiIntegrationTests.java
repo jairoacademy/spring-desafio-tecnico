@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import academy.jairo.springdesafiotecnico.TestTokens;
 import academy.jairo.springdesafiotecnico.TestcontainersConfiguration;
 import academy.jairo.springdesafiotecnico.activation.domain.ActivationRequest;
 import academy.jairo.springdesafiotecnico.activation.domain.FailureReason;
@@ -20,6 +21,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.ResultActions;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.contains;
@@ -106,7 +108,7 @@ class ActivationRequestApiIntegrationTests {
 		MvcResult created = postRequest(validBody("EXT-PERSIST")).andExpect(status().isCreated()).andReturn();
 		String location = created.getResponse().getHeader("Location");
 
-		MvcResult fetched = mockMvc.perform(get(location)).andExpect(status().isOk()).andReturn();
+		MvcResult fetched = perform(get(location)).andExpect(status().isOk()).andReturn();
 
 		Map<String, Object> createdBody = JsonPath.read(created.getResponse().getContentAsString(), "$");
 		Map<String, Object> fetchedBody = JsonPath.read(fetched.getResponse().getContentAsString(), "$");
@@ -118,7 +120,7 @@ class ActivationRequestApiIntegrationTests {
 		MvcResult created = postRequest(validBody("EXT-GET")).andExpect(status().isCreated()).andReturn();
 		String id = JsonPath.read(created.getResponse().getContentAsString(), "$.id");
 
-		mockMvc.perform(get("/api/v1/requests/{id}", id))
+		perform(get("/api/v1/requests/{id}", id))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.id").value(id))
 			.andExpect(jsonPath("$.externalId").value("EXT-GET"))
@@ -173,7 +175,7 @@ class ActivationRequestApiIntegrationTests {
 	@Test
 	void returnsNotFoundForUnknownId() throws Exception {
 		UUID unknown = UUID.randomUUID();
-		expectProblem(mockMvc.perform(get("/api/v1/requests/{id}", unknown)), 404)
+		expectProblem(perform(get("/api/v1/requests/{id}", unknown)), 404)
 			.andExpect(jsonPath("$.type").value("https://problems.ativacao.example/not-found"))
 			.andExpect(jsonPath("$.title").value("Solicitação não encontrada"))
 			.andExpect(jsonPath("$.instance").value("/api/v1/requests/" + unknown));
@@ -181,20 +183,20 @@ class ActivationRequestApiIntegrationTests {
 
 	@Test
 	void rejectsIdThatIsNotUuid() throws Exception {
-		expectProblem(mockMvc.perform(get("/api/v1/requests/abc")), 400)
+		expectProblem(perform(get("/api/v1/requests/abc")), 400)
 			.andExpect(jsonPath("$.type").value("https://problems.ativacao.example/invalid-parameter"))
 			.andExpect(jsonPath("$.instance").value("/api/v1/requests/abc"));
 	}
 
 	@Test
 	void rejectsUnsupportedMethod() throws Exception {
-		expectProblem(mockMvc.perform(delete("/api/v1/requests/{id}", UUID.randomUUID())), 405);
+		expectProblem(perform(delete("/api/v1/requests/{id}", UUID.randomUUID())), 405);
 	}
 
 	@Test
 	void traceIdIsDistinctPerRequest() throws Exception {
-		String first = traceIdOf(expectProblem(mockMvc.perform(get("/api/v1/requests/{id}", UUID.randomUUID())), 404));
-		String second = traceIdOf(expectProblem(mockMvc.perform(get("/api/v1/requests/{id}", UUID.randomUUID())), 404));
+		String first = traceIdOf(expectProblem(perform(get("/api/v1/requests/{id}", UUID.randomUUID())), 404));
+		String second = traceIdOf(expectProblem(perform(get("/api/v1/requests/{id}", UUID.randomUUID())), 404));
 
 		assertThat(first).isNotEqualTo(second);
 	}
@@ -207,7 +209,7 @@ class ActivationRequestApiIntegrationTests {
 		postRequest(body("EXT-A2", customerA)).andExpect(status().isCreated());
 		postRequest(body("EXT-B1", customerB)).andExpect(status().isCreated());
 
-		mockMvc.perform(get("/api/v1/requests").param("customerId", customerA))
+		perform(get("/api/v1/requests").param("customerId", customerA))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.content.length()").value(2))
 			.andExpect(jsonPath("$.content[*].customerId").value(everyItem(is(customerA))))
@@ -225,7 +227,7 @@ class ActivationRequestApiIntegrationTests {
 		repository.save(processing);
 		postRequest(body("EXT-OTHER", uniqueCustomer("CUST-B"))).andExpect(status().isCreated());
 
-		mockMvc.perform(get("/api/v1/requests").param("status", "PENDING").param("customerId", customer))
+		perform(get("/api/v1/requests").param("status", "PENDING").param("customerId", customer))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.content.length()").value(1))
 			.andExpect(jsonPath("$.content[0].externalId").value("EXT-PENDING"))
@@ -243,11 +245,11 @@ class ActivationRequestApiIntegrationTests {
 		failed.fail(FailureReason.MAX_ATTEMPTS_EXCEEDED, Instant.now());
 		repository.save(failed);
 
-		mockMvc.perform(get("/api/v1/requests/{id}", failed.getId()))
+		perform(get("/api/v1/requests/{id}", failed.getId()))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.status").value("FAILED"))
 			.andExpect(jsonPath("$.failureReason").value("MAX_ATTEMPTS_EXCEEDED"));
-		mockMvc.perform(get("/api/v1/requests").param("status", "FAILED").param("customerId", customer))
+		perform(get("/api/v1/requests").param("status", "FAILED").param("customerId", customer))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.content.length()").value(1))
 			.andExpect(jsonPath("$.content[0].id").value(failed.getId().toString()))
@@ -261,7 +263,7 @@ class ActivationRequestApiIntegrationTests {
 		postRequest(body("EXT-P2", customer)).andExpect(status().isCreated());
 		postRequest(body("EXT-P3", customer)).andExpect(status().isCreated());
 
-		mockMvc.perform(get("/api/v1/requests").param("customerId", customer).param("page", "0").param("size", "2"))
+		perform(get("/api/v1/requests").param("customerId", customer).param("page", "0").param("size", "2"))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.content.length()").value(2))
 			.andExpect(jsonPath("$.content[0].externalId").value("EXT-P3"))
@@ -274,7 +276,7 @@ class ActivationRequestApiIntegrationTests {
 
 	@Test
 	void usesDefaultPagination() throws Exception {
-		mockMvc.perform(get("/api/v1/requests").param("customerId", uniqueCustomer("CUST-EMPTY")))
+		perform(get("/api/v1/requests").param("customerId", uniqueCustomer("CUST-EMPTY")))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.page").value(0))
 			.andExpect(jsonPath("$.size").value(20))
@@ -283,20 +285,20 @@ class ActivationRequestApiIntegrationTests {
 
 	@Test
 	void rejectsUnknownStatusFilter() throws Exception {
-		expectProblem(mockMvc.perform(get("/api/v1/requests").param("status", "DONE")), 400)
+		expectProblem(perform(get("/api/v1/requests").param("status", "DONE")), 400)
 			.andExpect(jsonPath("$.type").value("https://problems.ativacao.example/invalid-parameter"));
 	}
 
 	@Test
 	void rejectsPageSizeAboveLimit() throws Exception {
-		expectProblem(mockMvc.perform(get("/api/v1/requests").param("size", "101")), 400)
+		expectProblem(perform(get("/api/v1/requests").param("size", "101")), 400)
 			.andExpect(jsonPath("$.type").value(VALIDATION_TYPE))
 			.andExpect(jsonPath("$.errors[*].field").value(hasItem("size")));
 	}
 
 	@Test
 	void rejectsNegativePage() throws Exception {
-		expectProblem(mockMvc.perform(get("/api/v1/requests").param("page", "-1")), 400)
+		expectProblem(perform(get("/api/v1/requests").param("page", "-1")), 400)
 			.andExpect(jsonPath("$.type").value(VALIDATION_TYPE))
 			.andExpect(jsonPath("$.errors[*].field").value(hasItem("page")));
 	}
@@ -308,7 +310,7 @@ class ActivationRequestApiIntegrationTests {
 				{"externalId":"EXT-1","customerId":"%s","productCode":"internet 500"}""".formatted(customer))
 			.andExpect(status().isBadRequest());
 
-		mockMvc.perform(get("/api/v1/requests").param("customerId", customer))
+		perform(get("/api/v1/requests").param("customerId", customer))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.content.length()").value(0))
 			.andExpect(jsonPath("$.totalElements").value(0));
@@ -400,7 +402,7 @@ class ActivationRequestApiIntegrationTests {
 				{"externalId":"EXT-CONF-3","customerId":"CUST-2","productCode":"INTERNET-900"}""")
 			.andExpect(status().isConflict());
 
-		MvcResult fetched = mockMvc.perform(get(created.getResponse().getHeader("Location")))
+		MvcResult fetched = perform(get(created.getResponse().getHeader("Location")))
 			.andExpect(status().isOk())
 			.andReturn();
 
@@ -424,7 +426,11 @@ class ActivationRequestApiIntegrationTests {
 	}
 
 	private ResultActions postRequest(String body) throws Exception {
-		return mockMvc.perform(post("/api/v1/requests").contentType(MediaType.APPLICATION_JSON).content(body));
+		return perform(post("/api/v1/requests").contentType(MediaType.APPLICATION_JSON).content(body));
+	}
+
+	private ResultActions perform(MockHttpServletRequestBuilder request) throws Exception {
+		return mockMvc.perform(request.with(TestTokens.readWrite()));
 	}
 
 	private static String uniqueCustomer(String prefix) {

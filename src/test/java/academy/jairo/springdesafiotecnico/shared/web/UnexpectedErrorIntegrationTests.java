@@ -2,6 +2,7 @@ package academy.jairo.springdesafiotecnico.shared.web;
 
 import java.util.UUID;
 
+import academy.jairo.springdesafiotecnico.TestTokens;
 import academy.jairo.springdesafiotecnico.TestcontainersConfiguration;
 import academy.jairo.springdesafiotecnico.activation.application.ActivationRequestService;
 import com.jayway.jsonpath.JsonPath;
@@ -43,7 +44,7 @@ class UnexpectedErrorIntegrationTests {
 	void unexpectedFailureReturnsGenericProblemAndLogsSameTraceId(CapturedOutput output) throws Exception {
 		given(service.findById(any(UUID.class))).willThrow(new RuntimeException("segredo interno"));
 
-		String body = mockMvc.perform(get("/api/v1/requests/{id}", UUID.randomUUID()))
+		String body = mockMvc.perform(get("/api/v1/requests/{id}", UUID.randomUUID()).with(TestTokens.readWrite()))
 			.andExpect(status().isInternalServerError())
 			.andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
 			.andExpect(jsonPath("$.type").value("https://problems.ativacao.example/internal-error"))
