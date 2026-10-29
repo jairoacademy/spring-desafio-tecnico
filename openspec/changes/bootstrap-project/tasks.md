@@ -27,7 +27,7 @@
 
 ## 6. Integração contínua
 
-- [ ] 6.1 Criar `.github/workflows/ci.yml` com job `verify` (Temurin 21, cache Maven, `./mvnw -B verify`) e job `compose-smoke` (depende de `verify`: `docker compose up --build --wait`, `id -u` diferente de `0` no `app`, `curl` no mock do provedor, `docker compose logs` em falha e `docker compose down -v` sempre), disparado em `push` e `pull_request`; verificar a sintaxe com `actionlint` (se disponível) e o resultado verde no primeiro push da branch
+- [x] 6.1 Criar `.github/workflows/ci.yml` com job `verify` (Temurin 21, cache Maven, `./mvnw -B verify`) e job `compose-smoke` (depende de `verify`: `docker compose up --build --wait`, `id -u` diferente de `0` no `app`, `curl` no mock do provedor, `docker compose logs` em falha e `docker compose down -v` sempre), disparado em `push` e `pull_request`; verificar a sintaxe com `actionlint` (se disponível) e o resultado verde no primeiro push da branch
 - [x] 6.2 Adicionar ao README o badge do workflow e verificar que o link aponta para `ci.yml`
 
 ## 7. Fechamento
