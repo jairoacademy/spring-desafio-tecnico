@@ -81,6 +81,27 @@ class ActivationRequestTest {
 		assertThat(request.getUpdatedAt()).isEqualTo(T2.truncatedTo(ChronoUnit.MICROS));
 	}
 
+	@Test
+	void sameContentHasNoConflictingFields() {
+		assertThat(newRequest().conflictingFields("CUST-1", "INTERNET-500")).isEmpty();
+	}
+
+	@Test
+	void reportsDivergentProductCode() {
+		assertThat(newRequest().conflictingFields("CUST-1", "INTERNET-900")).containsExactly("productCode");
+	}
+
+	@Test
+	void reportsDivergentCustomerId() {
+		assertThat(newRequest().conflictingFields("CUST-2", "INTERNET-500")).containsExactly("customerId");
+	}
+
+	@Test
+	void reportsBothDivergentFieldsInJsonOrder() {
+		assertThat(newRequest().conflictingFields("CUST-2", "INTERNET-900")).containsExactly("customerId",
+				"productCode");
+	}
+
 	static Stream<Arguments> rejectedTransitions() {
 		Consumer<ActivationRequest> toCompleted = r -> {
 			r.startProcessing(T1);

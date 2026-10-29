@@ -2,6 +2,8 @@ package academy.jairo.springdesafiotecnico.activation.domain;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 import jakarta.persistence.Column;
@@ -90,6 +92,21 @@ public class ActivationRequest {
 		transitionTo(ActivationStatus.PENDING, now);
 		this.attempts++;
 		this.nextAttemptAt = truncate(nextAttemptAt);
+	}
+
+	/**
+	 * Campos em que uma nova criação com o mesmo {@code externalId} diverge desta solicitação,
+	 * na ordem do JSON. Lista vazia: é um retry idêntico.
+	 */
+	public List<String> conflictingFields(String customerId, String productCode) {
+		List<String> fields = new ArrayList<>(2);
+		if (!this.customerId.equals(customerId)) {
+			fields.add("customerId");
+		}
+		if (!this.productCode.equals(productCode)) {
+			fields.add("productCode");
+		}
+		return List.copyOf(fields);
 	}
 
 	private void transitionTo(ActivationStatus target, Instant now) {
