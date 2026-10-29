@@ -20,7 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class ActivationRequestService {
 
-	// Ordenação fixa, atendida pelos índices (customer_id|status, created_at DESC); id desempata.
+	// Ordenação fixa, atendida pelos índices (client_id[, customer_id|status], created_at DESC); id desempata.
 	private static final Sort NEWEST_FIRST = Sort.by(Sort.Direction.DESC, "createdAt", "id");
 
 	private final ActivationRequestRepository repository;
@@ -38,24 +38,32 @@ public class ActivationRequestService {
 	 * Sem {@code @Transactional}: depois da violação a transação do PostgreSQL fica abortada, então o
 	 * insert e a releitura rodam cada um na transação do repositório.
 	 */
-	public CreationResult create(String externalId, String customerId, String productCode) {
+	public CreationResult create(String clientId, String externalId, String customerId, String productCode) {
 		Optional<ActivationRequest> existing = repository.findByExternalId(externalId);
 		if (existing.isPresent()) {
-			return resolveExisting(existing.get(), customerId, productCode);
+			return resolveExisting(existing.get(), clientId, customerId, productCode);
 		}
 		try {
 			ActivationRequest saved = repository
-				.saveAndFlush(ActivationRequest.create(externalId, customerId, productCode, clock.instant()));
+				.saveAndFlush(ActivationRequest.create(clientId, externalId, customerId, productCode, clock.instant()));
 			return new CreationResult(saved, true);
 		}
 		catch (DataIntegrityViolationException ex) {
 			// corrida com outra criação do mesmo externalId; sem registro, a violação foi outra
 			ActivationRequest winner = repository.findByExternalId(externalId).orElseThrow(() -> ex);
-			return resolveExisting(winner, customerId, productCode);
+			return resolveExisting(winner, clientId, customerId, productCode);
 		}
 	}
 
-	private static CreationResult resolveExisting(ActivationRequest existing, String customerId, String productCode) {
+	/**
+	 * Dono antes do conteúdo: o registro de outro cliente é sempre conflito sem detalhes. Devolver o registro
+	 * vazaria id e status, e os campos divergentes permitiriam descobrir o conteúdo por tentativa (ADR 0004).
+	 */
+	private static CreationResult resolveExisting(ActivationRequest existing, String clientId, String customerId,
+			String productCode) {
+		if (!existing.getClientId().equals(clientId)) {
+			throw ActivationRequestConflictException.ownedByAnotherClient(existing.getExternalId());
+		}
 		List<String> conflictingFields = existing.conflictingFields(customerId, productCode);
 		if (!conflictingFields.isEmpty()) {
 			throw new ActivationRequestConflictException(existing.getExternalId(), conflictingFields);
@@ -63,15 +71,17 @@ public class ActivationRequestService {
 		return new CreationResult(existing, false);
 	}
 
+	/** Solicitação de outro dono responde como inexistente: mesma exceção, mesma mensagem. */
 	@Transactional(readOnly = true)
-	public ActivationRequest findById(UUID id) {
-		return repository.findById(id).orElseThrow(() -> new ActivationRequestNotFoundException(id));
+	public ActivationRequest findById(String clientId, UUID id) {
+		return repository.findByIdAndClientId(id, clientId)
+			.orElseThrow(() -> new ActivationRequestNotFoundException(id));
 	}
 
 	@Transactional(readOnly = true)
-	public Page<ActivationRequest> findAll(@Nullable ActivationStatus status, @Nullable String customerId, int page,
-			int size) {
-		return repository.findAll(ActivationRequestSpecifications.filter(status, customerId),
+	public Page<ActivationRequest> findAll(String clientId, @Nullable ActivationStatus status,
+			@Nullable String customerId, int page, int size) {
+		return repository.findAll(ActivationRequestSpecifications.filter(clientId, status, customerId),
 				PageRequest.of(page, size, NEWEST_FIRST));
 	}
 

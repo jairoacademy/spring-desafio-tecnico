@@ -1,0 +1,41 @@
+meta {
+  name: sistema-a cria
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/v1/requests
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "externalId": "{{securityExternalId}}",
+    "customerId": "{{customerId}}",
+    "productCode": "INTERNET-500"
+  }
+}
+
+script:post-response {
+  if (res.status === 201) {
+    bru.setVar("ownedRequestId", res.body.id);
+  }
+}
+
+tests {
+  test("201 e o dono não aparece no corpo", function() {
+    expect(res.status).to.equal(201);
+    expect(res.body).to.not.have.property("clientId");
+  });
+}
+
+docs {
+  Com a auth da collection (`sistema-a`), cria a solicitação com o mesmo `externalId` que
+  `sistema-leitura` não conseguiu criar. O dono fica gravado, mas não sai na resposta.
+}

@@ -5,15 +5,15 @@ import academy.jairo.springdesafiotecnico.activation.domain.ActivationStatus;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.jpa.domain.Specification;
 
-/** Filtros opcionais da listagem; filtro nulo não restringe. */
+/** Filtros da listagem: o dono sempre restringe; nos opcionais, filtro nulo não restringe. */
 public final class ActivationRequestSpecifications {
 
 	private ActivationRequestSpecifications() {
 	}
 
-	public static Specification<ActivationRequest> filter(@Nullable ActivationStatus status,
+	public static Specification<ActivationRequest> filter(String clientId, @Nullable ActivationStatus status,
 			@Nullable String customerId) {
-		Specification<ActivationRequest> spec = Specification.unrestricted();
+		Specification<ActivationRequest> spec = hasClientId(clientId);
 		if (status != null) {
 			spec = spec.and(hasStatus(status));
 		}
@@ -21,6 +21,10 @@ public final class ActivationRequestSpecifications {
 			spec = spec.and(hasCustomerId(customerId));
 		}
 		return spec;
+	}
+
+	static Specification<ActivationRequest> hasClientId(String clientId) {
+		return (root, query, cb) -> cb.equal(root.get("clientId"), clientId);
 	}
 
 	static Specification<ActivationRequest> hasStatus(ActivationStatus status) {

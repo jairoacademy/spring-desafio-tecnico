@@ -1,0 +1,31 @@
+meta {
+  name: Sem token
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/requests
+  body: none
+  auth: none
+}
+
+tests {
+  test("401 em ProblemDetail", function() {
+    expect(res.status).to.equal(401);
+    expect(res.getHeader("content-type")).to.contain("application/problem+json");
+    expect(res.body.type).to.equal("https://problems.ativacao.example/unauthorized");
+    expect(res.body.instance).to.equal("/api/v1/requests");
+    expect(res.body.traceId).to.match(/^[0-9a-f]{32}$/);
+  });
+
+  test("WWW-Authenticate com esquema Bearer", function() {
+    expect(res.getHeader("www-authenticate")).to.match(/^Bearer/);
+  });
+}
+
+docs {
+  Sem `Authorization`, a chamada para no filtro do Spring Security, antes do controller.
+  O corpo segue o mesmo formato dos demais erros, com `traceId`, e o header
+  `WWW-Authenticate: Bearer` segue a RFC 6750.
+}

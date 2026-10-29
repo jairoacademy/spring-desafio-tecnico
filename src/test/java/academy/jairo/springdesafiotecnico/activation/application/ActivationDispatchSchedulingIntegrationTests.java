@@ -2,6 +2,7 @@ package academy.jairo.springdesafiotecnico.activation.application;
 
 import java.time.Duration;
 
+import academy.jairo.springdesafiotecnico.TestTokens;
 import academy.jairo.springdesafiotecnico.TestcontainersConfiguration;
 import com.github.tomakehurst.wiremock.client.WireMock;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
@@ -58,7 +59,7 @@ class ActivationDispatchSchedulingIntegrationTests {
 		String id = create("EXT-SCHEDULED");
 
 		await().atMost(Duration.ofSeconds(5))
-			.untilAsserted(() -> mockMvc.perform(get("/api/v1/requests/{id}", id))
+			.untilAsserted(() -> mockMvc.perform(get("/api/v1/requests/{id}", id).with(TestTokens.readWrite()))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.status").value("COMPLETED")));
 	}
@@ -78,7 +79,9 @@ class ActivationDispatchSchedulingIntegrationTests {
 	/** Cria pela API e confere {@code 201} com {@code PENDING}; devolve o {@code id}. */
 	private String create(String externalId) throws Exception {
 		MvcResult result = mockMvc
-			.perform(post("/api/v1/requests").contentType(MediaType.APPLICATION_JSON).content("""
+			.perform(post("/api/v1/requests").with(TestTokens.readWrite())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
 						{"externalId":"%s","customerId":"CUST-1","productCode":"INTERNET-500"}""".formatted(externalId)))
 			.andExpect(status().isCreated())
 			.andExpect(jsonPath("$.status").value("PENDING"))

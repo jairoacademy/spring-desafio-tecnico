@@ -26,7 +26,7 @@ O serviço SHALL manter no máximo uma solicitação por `externalId`, considera
 - **THEN** a segunda gravação falha por violação de unicidade e o banco mantém só a primeira
 
 ### Requirement: Retry idêntico devolve o registro existente
-Quando um cliente envia criação com `externalId` já registrado e com `customerId` e `productCode` iguais aos do registro existente, o serviço SHALL responder `200 OK` com o registro existente no mesmo formato da criação. Nenhuma solicitação nova MUST ser criada, e o registro existente MUST NOT ser alterado. (Item 3, Diferencial)
+Quando um cliente envia criação com `externalId` já registrado por ele mesmo e com `customerId` e `productCode` iguais aos do registro existente, o serviço SHALL responder `200 OK` com o registro existente no mesmo formato da criação. Nenhuma solicitação nova MUST ser criada, e o registro existente MUST NOT ser alterado. (Itens 3 e 7, Diferencial)
 
 #### Scenario: Retry com o mesmo conteúdo
 - **WHEN** um cliente cria `{"externalId":"EXT-RETRY","customerId":"CUST-1","productCode":"INTERNET-500"}` e envia o mesmo corpo de novo
@@ -37,7 +37,7 @@ Quando um cliente envia criação com `externalId` já registrado e com `custome
 - **THEN** a resposta é `200` com o `status` atual da solicitação, e não `PENDING`
 
 ### Requirement: Conteúdo divergente é conflito
-Quando um cliente envia criação com `externalId` já registrado e `customerId` ou `productCode` diferente do registro existente, o serviço SHALL responder `409 Conflict` em ProblemDetail, com `type` de conflito de duplicidade e a lista `conflictingFields` com os nomes dos campos divergentes. O registro existente MUST NOT ser alterado. (Itens 3 e 6, Diferencial)
+Quando um cliente envia criação com `externalId` já registrado por ele mesmo e `customerId` ou `productCode` diferente do registro existente, o serviço SHALL responder `409 Conflict` em ProblemDetail, com `type` de conflito de duplicidade e a lista `conflictingFields` com os nomes dos campos divergentes. O registro existente MUST NOT ser alterado. (Itens 3, 6 e 7, Diferencial)
 
 #### Scenario: productCode divergente
 - **WHEN** existe solicitação `{"externalId":"EXT-CONF","customerId":"CUST-1","productCode":"INTERNET-500"}` e um cliente envia o mesmo `externalId` e `customerId` com `productCode` `INTERNET-900`
@@ -57,3 +57,18 @@ Quando várias criações com o mesmo `externalId` e o mesmo conteúdo chegam ao
 #### Scenario: N requisições paralelas idênticas
 - **WHEN** 10 requisições de criação com o mesmo `externalId` e o mesmo conteúdo são disparadas ao mesmo tempo contra o banco real
 - **THEN** o banco tem exatamente 1 solicitação com esse `externalId`, uma resposta indica criação, as outras 9 indicam registro existente e todas trazem o mesmo `id`
+
+### Requirement: externalId de outro cliente é conflito sem detalhes
+Quando um cliente envia criação com `externalId` já registrado por outro cliente, o serviço SHALL responder `409 Conflict` em ProblemDetail com `type` de conflito de duplicidade, sem `conflictingFields`, qualquer que seja o conteúdo enviado. A resposta MUST NOT trazer `id`, status ou valores do registro existente. O registro existente MUST NOT ser alterado. (Itens 3 e 7, Diferencial)
+
+#### Scenario: Mesmo conteúdo de outro cliente
+- **WHEN** `sistema-a` cria `{"externalId":"EXT-OWNER","customerId":"CUST-1","productCode":"INTERNET-500"}` e `sistema-b` envia o mesmo corpo
+- **THEN** a resposta para `sistema-b` é `409` em `application/problem+json`, sem `conflictingFields` e sem `id`
+
+#### Scenario: Conteúdo diferente de outro cliente
+- **WHEN** `sistema-a` cria uma solicitação com `externalId` `EXT-OWNER-2` e `sistema-b` envia o mesmo `externalId` com `productCode` diferente
+- **THEN** a resposta para `sistema-b` é `409` sem `conflictingFields`, igual ao caso de conteúdo idêntico
+
+#### Scenario: Registro de outro cliente não muda
+- **WHEN** `sistema-b` recebe `409` por `externalId` de `sistema-a` e `sistema-a` consulta a própria solicitação
+- **THEN** a solicitação continua com o mesmo dono, `customerId`, `productCode` e `updatedAt` da criação original

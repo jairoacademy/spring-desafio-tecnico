@@ -20,18 +20,41 @@ Pré-requisito: Docker.
 docker compose up --build
 ```
 
-Sobe aplicação, PostgreSQL e o mock do provedor externo, cada um com health check. A aplicação só inicia depois que o banco e o mock do provedor estão saudáveis, e envia as solicitações ao mock (`PROVIDER_URL=http://wiremock:8080`). Para rodar em segundo plano e esperar todos ficarem saudáveis, use `docker compose up --build -d --wait`.
+Sobe aplicação, PostgreSQL, o mock do provedor externo e um emissor de tokens de desenvolvimento, cada um com health check. A aplicação só inicia depois que o banco e o mock do provedor estão saudáveis, e envia as solicitações ao mock (`PROVIDER_URL=http://wiremock:8080`). Para rodar em segundo plano e esperar todos ficarem saudáveis, use `docker compose up --build -d --wait`.
 
 | Serviço | Porta | Descrição |
 |---|---|---|
 | `app` | `8080` | Aplicação |
 | `postgres` | `5432` | PostgreSQL |
 | `wiremock` | `8089` | Mock do provedor externo (WireMock); stubs em `wiremock/mappings/` |
+| `oauth2` | `8091` | Emissor de tokens OAuth 2.0 ([mock-oauth2-server](https://github.com/navikt/mock-oauth2-server)); clientes em `oauth2/config.json` |
 
 ```bash
 curl localhost:8080/actuator/health/readiness
 curl -X POST localhost:8089/provider/v1/activate
 ```
+
+#### Token de acesso
+
+A API exige `Authorization: Bearer <JWT>`. O serviço `oauth2` emite tokens por client credentials para três clientes de exemplo:
+
+| `client_id` | Escopos |
+|---|---|
+| `sistema-a` | `activation:read activation:write` |
+| `sistema-b` | `activation:read activation:write` |
+| `sistema-leitura` | `activation:read` |
+
+```bash
+TOKEN=$(curl -s -X POST localhost:8091/default/token \
+  -d grant_type=client_credentials -d client_id=sistema-a -d client_secret=dev \
+  -d 'scope=activation:read activation:write' | jq -r .access_token)
+
+curl -H "Authorization: Bearer $TOKEN" localhost:8080/api/v1/requests
+```
+
+O `client_id` vai no corpo (`client_secret_post`): é por ele que o emissor escolhe as claims. Os tokens valem 15 minutos e trazem `iss` `http://localhost:8091/default`, `aud` `ativacao-api`, `client_id` e `scope`. Sem `jq`, copie o `access_token` da resposta.
+
+> **Só para desenvolvimento.** O `mock-oauth2-server` aceita qualquer segredo e emite token para qualquer `client_id`. Ele existe apenas no `compose.yaml`; em produção, a aplicação aponta para o servidor de autorização real (ver [Configuração da autenticação](#configuração-da-autenticação)).
 
 Para parar e apagar os dados: `docker compose down -v`.
 
@@ -42,11 +65,11 @@ Para parar e apagar os dados: `docker compose down -v`.
 Pré-requisitos: Java 21 e Docker.
 
 ```bash
-docker compose up -d postgres wiremock
+docker compose up -d postgres wiremock oauth2
 ./mvnw spring-boot:run -Dspring-boot.run.profiles=local
 ```
 
-No IntelliJ, informe `local` em **Active profiles** na Run Configuration. O perfil `local` aponta para o PostgreSQL (`localhost:5432`) e o mock do provedor (`localhost:8089`) do `compose.yaml`.
+No IntelliJ, informe `local` em **Active profiles** na Run Configuration. O perfil `local` aponta para o PostgreSQL (`localhost:5432`), o mock do provedor (`localhost:8089`) e o emissor de tokens (`localhost:8091`, JWKS em `/default/jwks`, emissor `http://localhost:8091/default`, audiência `ativacao-api`) do `compose.yaml`. O token é obtido como em [Token de acesso](#token-de-acesso).
 
 ### Testes
 
@@ -58,11 +81,11 @@ Build e testes com um único comando. Os testes sobem o próprio PostgreSQL via 
 
 `src/test/resources/config/application.properties` desliga o envio agendado nos testes (`activation.dispatch.enabled=false`): os testes do worker chamam o `ActivationDispatcher` direto, e só `ActivationDispatchSchedulingIntegrationTests` liga o agendamento.
 
-O pipeline de CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) roda a cada push e pull request: o job `verify` executa `./mvnw -B verify` e o job `compose-smoke` sobe o ambiente com `docker compose up --build --wait` e confere readiness, usuário não-root e mock do provedor.
+O pipeline de CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) roda a cada push e pull request: o job `verify` executa `./mvnw -B verify` e o job `compose-smoke` sobe o ambiente com `docker compose up --build --wait` e confere readiness, usuário não-root, mock do provedor e uma chamada à API com token de `sistema-leitura` obtido no `oauth2`.
 
 ### Coleção Bruno
 
-Coleção [Bruno](https://www.usebruno.com/) em [`bruno/`](bruno/). Abra a pasta no app e rode as pastas em ordem (`01` antes de `04`), ou execute `bru run --env local` dentro de `bruno/` se tiver o Bruno CLI instalado.
+Coleção [Bruno](https://www.usebruno.com/) em [`bruno/`](bruno/). Abra a pasta no app e rode as pastas em ordem (`01` antes de `04`), ou execute `bru run --env local` dentro de `bruno/` se tiver o Bruno CLI instalado. A coleção obtém o token sozinha (OAuth 2.0 client credentials como `sistema-a`, no serviço `oauth2` do `compose.yaml`); a pasta `06 Segurança` mostra `401`, `403` e o isolamento entre clientes.
 
 ### Configuração do banco
 
@@ -73,6 +96,18 @@ Coleção [Bruno](https://www.usebruno.com/) em [`bruno/`](bruno/). Abra a pasta
 | `DB_PASSWORD` | Senha do banco |
 
 O `application.properties` não tem valores padrão: sem essas variáveis, a aplicação não sobe. As credenciais do `compose.yaml` e do `application-local.properties` são apenas para desenvolvimento local. Em produção, os valores vêm de variáveis de ambiente injetadas por um gerenciador de segredos.
+
+### Configuração da autenticação
+
+A API é um OAuth 2.0 Resource Server: aceita só JWT assinado por uma chave do JWKS configurado, com o emissor e a audiência configurados.
+
+| Variável | Descrição |
+|---|---|
+| `JWT_JWK_SET_URI` | URL do JWKS (chaves públicas) do servidor de autorização |
+| `JWT_ISSUER_URI` | Valor exigido na claim `iss` |
+| `JWT_AUDIENCE` | Valor exigido na claim `aud` |
+
+As três são obrigatórias: sem elas, a aplicação não sobe. As chaves são buscadas no primeiro uso, não na subida.
 
 ### Configuração do provedor e do envio
 
@@ -111,16 +146,28 @@ Os demais endpoints do Actuator (`env`, `beans`, `configprops` etc.) não são e
 
 ## API
 
-| Método e caminho | Descrição | Sucesso |
-|---|---|---|
-| `POST /api/v1/requests` | Cria uma solicitação de ativação com status `PENDING`; o envio ao provedor é assíncrono | `201` + header `Location`; `200` em retry idêntico; `409` se o `externalId` já existe com outro conteúdo |
-| `GET /api/v1/requests/{id}` | Consulta uma solicitação e seu status atual | `200` (`404` se não existir) |
-| `GET /api/v1/requests` | Lista solicitações, da mais recente para a mais antiga | `200` |
+| Método e caminho | Escopo exigido | Descrição | Sucesso |
+|---|---|---|---|
+| `POST /api/v1/requests` | `activation:write` | Cria uma solicitação de ativação com status `PENDING`; o envio ao provedor é assíncrono | `201` + header `Location`; `200` em retry idêntico; `409` se o `externalId` já existe com outro conteúdo |
+| `GET /api/v1/requests/{id}` | `activation:read` | Consulta uma solicitação do cliente e seu status atual | `200` (`404` se não existir ou for de outro cliente) |
+| `GET /api/v1/requests` | `activation:read` | Lista as solicitações do cliente, da mais recente para a mais antiga | `200` |
+
+### Autenticação e isolamento
+
+Toda chamada a `/api/v1/requests` exige `Authorization: Bearer <JWT>` (OAuth 2.0, client credentials). Sem token, ou com token inválido, a resposta é `401`; com token válido sem o escopo da operação, `403`. Um escopo não implica o outro: um cliente que cria e consulta precisa dos dois.
+
+O cliente é identificado pela claim `client_id` do token e vira o dono das solicitações que cria. Cada cliente só enxerga as próprias:
+
+- a consulta por id de uma solicitação de outro cliente responde `404`, igual a um id inexistente, para não confirmar que o id existe (OWASP API1:2023, BOLA);
+- a listagem e a contagem de `totalElements` consideram só as solicitações do cliente do token.
+
+O dono não aparece no corpo das respostas. Os exemplos abaixo usam `$TOKEN` com um access token válido.
 
 ### Criar
 
 ```bash
 curl -i -X POST localhost:8080/api/v1/requests \
+  -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"externalId":"EXT-12345","customerId":"CUST-10001","productCode":"INTERNET-500"}'
 ```
@@ -146,10 +193,11 @@ Datas são ISO-8601 em UTC (sufixo `Z`), com precisão de microssegundos.
 
 A resposta sai sem esperar o provedor. Depois, o `status` muda sozinho (ver [Integração com o provedor](#integração-com-o-provedor)): em poucos segundos, com o provedor respondendo, a solicitação chega a `COMPLETED` ou `FAILED`.
 
-O `externalId` é único em todo o serviço (ver [Duplicidade](#duplicidade)). Repetir o mesmo corpo devolve `200` com o registro existente, no status atual, sem header `Location`. O mesmo `externalId` com `customerId` ou `productCode` diferente devolve `409`:
+O `externalId` é único em todo o serviço (ver [Duplicidade](#duplicidade)). Repetir o mesmo corpo, com o mesmo cliente, devolve `200` com o registro existente, no status atual, sem header `Location`. O mesmo `externalId` com `customerId` ou `productCode` diferente devolve `409`; se o `externalId` é de outro cliente, o `409` vem sem `conflictingFields`:
 
 ```bash
 curl -i -X POST localhost:8080/api/v1/requests \
+  -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"externalId":"EXT-12345","customerId":"CUST-10001","productCode":"INTERNET-900"}'
 ```
@@ -172,7 +220,7 @@ Content-Type: application/problem+json
 ### Consultar
 
 ```bash
-curl localhost:8080/api/v1/requests/0b5c8f1e-6a51-4a3e-9d4c-2f8e7a1b3c9d
+curl -H "Authorization: Bearer $TOKEN" localhost:8080/api/v1/requests/0b5c8f1e-6a51-4a3e-9d4c-2f8e7a1b3c9d
 ```
 
 ```json
@@ -193,7 +241,7 @@ curl localhost:8080/api/v1/requests/0b5c8f1e-6a51-4a3e-9d4c-2f8e7a1b3c9d
 ### Listar
 
 ```bash
-curl 'localhost:8080/api/v1/requests?customerId=CUST-10001&status=PENDING&page=0&size=20'
+curl -H "Authorization: Bearer $TOKEN" 'localhost:8080/api/v1/requests?customerId=CUST-10001&status=PENDING&page=0&size=20'
 ```
 
 | Parâmetro | Obrigatório | Regra |
@@ -248,12 +296,14 @@ Todo erro da API é um [Problem Details (RFC 9457)](https://www.rfc-editor.org/r
 | Campos inválidos (corpo ou parâmetros da listagem) | `400` | `validation-error` (com `errors`) |
 | Parâmetro com tipo inválido (`id` não UUID, `status` desconhecido) | `400` | `invalid-parameter` |
 | Corpo ilegível | `400` | `malformed-body` |
-| Solicitação inexistente | `404` | `not-found` |
-| `externalId` já registrado com outro conteúdo | `409` | `duplicate-external-id` (com `conflictingFields`) |
+| Token ausente, malformado ou inválido (assinatura, emissor, audiência, expiração, sem `client_id`) | `401` | `unauthorized` (com header `WWW-Authenticate: Bearer ...`) |
+| Token válido sem o escopo da operação | `403` | `forbidden` |
+| Solicitação inexistente ou de outro cliente | `404` | `not-found` |
+| `externalId` já registrado com outro conteúdo (com `conflictingFields`) ou por outro cliente (sem `conflictingFields`) | `409` | `duplicate-external-id` |
 | Erro inesperado | `500` | `internal-error` |
 | Demais erros do HTTP (`405`, `415`, ...) | o do erro | `about:blank` |
 
-O `type` usa o domínio reservado `.example`: é um identificador, não uma página. Respostas de erro nunca trazem stack trace, nome de classe, mensagem da exceção original nem detalhes do parser JSON. Um erro `500` é registrado no log em nível `ERROR` com o mesmo `traceId` devolvido ao cliente, o que permite localizar a falha a partir da resposta.
+O `type` usa o domínio reservado `.example`: é um identificador, não uma página. Respostas de erro nunca trazem stack trace, nome de classe, mensagem da exceção original nem detalhes do parser JSON. No `401` e no `403`, o `detail` é fixo: não repete o token nem o motivo da recusa (ex.: expiração); o motivo padrão da RFC 6750 vai só no header `WWW-Authenticate`. Um erro `500` é registrado no log em nível `ERROR` com o mesmo `traceId` devolvido ao cliente, o que permite localizar a falha a partir da resposta.
 
 ## Decisões técnicas
 
@@ -317,11 +367,44 @@ O corpo da resposta não é lido; só o status e o header `Retry-After` importam
 
 Circuit breaker não foi implementado: o `batch-size` por rodada e o backoff já limitam a pressão sobre um provedor fora do ar. Fica como evolução no ADR 0003.
 
+### Segurança
+
+Decisões registradas no [ADR 0004](docs/adr/0004-seguranca-da-api.md).
+
+**Fluxo client credentials.** Os consumidores são sistemas, sem usuário humano. Cada sistema tem `client_id` e segredo (ou chave privada, com `private_key_jwt`) no servidor de autorização:
+
+1. o sistema chama `POST /token` do servidor de autorização com `grant_type=client_credentials`, as próprias credenciais e os escopos desejados;
+2. o servidor devolve um access token JWT de vida curta (minutos), assinado com a chave privada dele, com `iss`, `aud`, `exp`, `client_id` e `scope`;
+3. o sistema chama a API com `Authorization: Bearer <token>` e reaproveita o token até perto de expirar;
+4. a API valida o token sozinha, com a chave pública, sem chamar o servidor de autorização a cada requisição.
+
+**O que a API valida no JWT.** Assinatura por uma chave do JWKS em `JWT_JWK_SET_URI`; `iss` igual a `JWT_ISSUER_URI`; `aud` contendo `JWT_AUDIENCE`; `exp` e `nbf` com 60 s de tolerância de relógio; claim `client_id` presente, não vazia e com até 255 caracteres. Qualquer falha resulta em `401`. O decoder é o do Spring Boot (Resource Server), configurado só por propriedades, e o validador de `client_id` entra na mesma cadeia.
+
+**De onde vêm as chaves.** Do endpoint JWKS do servidor de autorização. As chaves são buscadas na primeira requisição autenticada, ficam em cache e são buscadas de novo quando chega um `kid` desconhecido: a rotação de chaves do servidor de autorização não exige deploy, desde que ele publique a chave nova antes de começar a assinar com ela. A aplicação não depende do servidor de autorização para subir. Usar `jwk-set-uri`, e não só `issuer-uri` com descoberta OIDC, permite buscar as chaves por um endereço interno diferente do `iss` (é o caso do `compose.yaml`).
+
+**Escopos.** `activation:write` para criar e `activation:read` para consultar e listar ([tabela da API](#api)). Um não implica o outro, e cada cliente recebe só o que usa. Token válido sem o escopo da operação: `403`. As respostas `401` e `403` saem em ProblemDetail com `traceId`, como os demais erros.
+
+**Isolamento entre clientes.** A claim `client_id` é o dono da solicitação. A consulta e a listagem filtram pelo dono na própria consulta ao banco; a solicitação de outro cliente responde `404`, indistinguível de um id inexistente (BOLA). Na criação, `externalId` de outro cliente é `409` sem detalhes ([Duplicidade](#duplicidade)).
+
+**Credencial do provedor externo: armazenamento e rotação.** Hoje o provedor não exige autenticação (o enunciado não define credenciais). Em produção:
+
+- *Armazenamento:* o segredo fica em um cofre (AWS Secrets Manager, Azure Key Vault, HashiCorp Vault), lido na subida pela integração do Spring Cloud com o cofre ou injetado como variável pelo orquestrador (Kubernetes Secret alimentado pelo External Secrets Operator). Nunca no repositório, na imagem ou em log.
+- *Preferência por OAuth 2.0 client credentials também na saída:* a aplicação obtém um token de vida curta para o provedor com `spring-boot-starter-security-oauth2-client` e o `OAuth2ClientHttpRequestInterceptor` no `RestClient`. O segredo de longa duração fica só entre a aplicação e o servidor de autorização; melhor ainda com `private_key_jwt` ou mTLS, em que não há segredo compartilhado.
+- *Rotação sem parada:* o cofre gera a credencial nova enquanto a antiga continua válida; a aplicação passa a usar a nova (releitura periódica ou novo deploy); a antiga é revogada depois de uma janela maior que o ciclo de releitura. Com chave de API simples, o provedor precisa aceitar duas chaves ativas durante a janela.
+- *Falha de autenticação no provedor:* hoje um `401`/`403` do provedor vira `PROVIDER_REJECTED`. Com credencial real, deveria virar alerta operacional, e não falha definitiva da solicitação.
+
+**Limites de corpo e de taxa (evolução, não implementados).**
+
+- *Corpo:* o payload válido tem menos de 300 bytes. O limite fica no gateway ou ingress (ex.: `client_max_body_size 16k` no NGINX), ou na aplicação com um filtro que rejeita `Content-Length` acima de 16 KB com `413`.
+- *Taxa:* por `client_id`, no API gateway, onde o estado é compartilhado entre instâncias, ou com Bucket4j e Redis na aplicação, respondendo `429` com `Retry-After`. Limite em memória por instância não funciona com várias réplicas.
+
 ### Duplicidade
 
-Decisão registrada no [ADR 0001](docs/adr/0001-unicidade-external-id.md).
+Decisões registradas nos ADRs [0001](docs/adr/0001-unicidade-external-id.md) e [0004](docs/adr/0004-seguranca-da-api.md) (regra entre clientes).
 
 O `externalId` é único em todo o serviço, de qualquer cliente, e a comparação diferencia maiúsculas de minúsculas. Quem garante é o banco, com a constraint `uq_activation_request_external_id UNIQUE (external_id)` (migração `V2`).
+
+O retry idêntico (`200`) e os `conflictingFields` só valem entre solicitações do mesmo cliente (`client_id` do token). Se o `externalId` é de outro cliente, a criação compara o dono antes do conteúdo e responde sempre o mesmo `409` sem detalhes: devolver o registro vazaria `id` e status, e os campos divergentes funcionariam como oráculo, permitindo descobrir por tentativa o `customerId` e o `productCode` alheios. O caminho da corrida (violação seguida de releitura) passa pela mesma regra.
 
 Verificar se o `externalId` existe e depois inserir não basta. No `READ COMMITTED` do PostgreSQL, duas requisições podem fazer o `SELECT` antes de qualquer uma confirmar o `INSERT`:
 
@@ -344,6 +427,7 @@ O serviço não abre transação própria na criação: no PostgreSQL, depois de
 |---|---|
 | Mesmo `externalId`, mesmo conteúdo (retry legítimo) | `200` com o registro existente e o status atual. O sistema de origem não sabe se a primeira chamada chegou; recebe `id` e status sem tratamento especial. Nenhum registro é criado ou alterado. |
 | Mesmo `externalId`, conteúdo diferente | `409` com `conflictingFields` (ex.: `["productCode"]`). Exige ação humana. A resposta não traz `id` nem valores do registro existente. |
+| `externalId` já registrado por **outro cliente**, com qualquer conteúdo | `409` sem `conflictingFields`, com `detail` "O externalId ... já está em uso.". Nenhum registro é criado ou alterado. |
 | Duas requisições idênticas em paralelo | Uma recebe `201`; as outras caem na violação, releem e recebem `200` com o mesmo `id`. |
 
 O teste `ActivationRequestConcurrencyIntegrationTests` dispara 10 criações simultâneas com o mesmo `externalId` contra o PostgreSQL do Testcontainers e verifica exatamente um registro, um único `created` e o mesmo `id` em todos os resultados.
@@ -358,14 +442,19 @@ Micrometer Tracing com bridge OpenTelemetry, sem exportador de spans. Cada requi
 
 ### Índices da listagem
 
+Toda listagem filtra pelo dono da solicitação (`client_id`, do token). Por isso os índices começam pelo dono (migração `V4`, que substitui os índices da `V1`):
+
 | Índice | Atende |
 |---|---|
-| `(customer_id, created_at DESC)` | filtro por cliente, com ou sem `status`, já na ordem da paginação |
-| `(status, created_at DESC)` | filtro só por status (ex.: listar `FAILED`), já na ordem da paginação |
+| `(client_id, created_at DESC)` | listagem sem filtro, já na ordem da paginação |
+| `(client_id, customer_id, created_at DESC)` | filtro por cliente, com ou sem `status`, já na ordem da paginação |
+| `(client_id, status, created_at DESC)` | filtro só por status (ex.: listar `FAILED`), já na ordem da paginação |
+
+Com `customerId` e `status` juntos, o índice de cliente filtra e o status é conferido nas linhas lidas.
 
 O worker e a reconciliação usam índices parciais (migração `V3`): `(next_attempt_at) WHERE status = 'PENDING'` e `(updated_at) WHERE status = 'PROCESSING'`. Ficam pequenos, porque a maioria das linhas acaba `COMPLETED` ou `FAILED`.
 
-A listagem sem filtro faz varredura e ordenação da tabela, aceitável no volume do desafio. Evolução: índice em `(created_at DESC)` ou paginação por cursor (`createdAt`, `id`) em vez de `page`/`size`.
+Evolução para volumes grandes: paginação por cursor (`createdAt`, `id`) em vez de `page`/`size`, que evita contar e pular linhas.
 
 O schema é criado pelo Flyway (`db/migration`), e o Hibernate só valida que entidade e tabela batem (`spring.jpa.hibernate.ddl-auto=validate`).
 
@@ -382,6 +471,9 @@ docker run --rm -p 8080:8080 \
   -e DB_USERNAME=<usuario> \
   -e DB_PASSWORD=<senha> \
   -e PROVIDER_URL=https://<provedor> \
+  -e JWT_JWK_SET_URI=https://<servidor-de-autorizacao>/jwks \
+  -e JWT_ISSUER_URI=https://<servidor-de-autorizacao> \
+  -e JWT_AUDIENCE=ativacao-api \
   ativacao
 ```
 
@@ -395,6 +487,9 @@ A imagem tem `HEALTHCHECK` em `/actuator/health/readiness`.
 | `DB_USERNAME` | Usuário do banco |
 | `DB_PASSWORD` | Senha do banco |
 | `PROVIDER_URL` | Base URL do provedor externo |
+| `JWT_JWK_SET_URI` | URL do JWKS do servidor de autorização |
+| `JWT_ISSUER_URI` | Emissor exigido no JWT (`iss`) |
+| `JWT_AUDIENCE` | Audiência exigida no JWT (`aud`) |
 
 Demais ajustes do provedor e do envio em [Configuração do provedor e do envio](#configuração-do-provedor-e-do-envio).
 
@@ -405,6 +500,7 @@ A imagem define `JAVA_TOOL_OPTIONS=-XX:MaxRAMPercentage=75.0`: o heap usa até 7
 ```bash
 docker run --rm -p 8080:8080 --memory=512m \
   -e JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=60.0" \
-  -e DB_URL=... -e DB_USERNAME=... -e DB_PASSWORD=... -e PROVIDER_URL=... \
+  -e DB_URL=... -e DB_USERNAME=... -e DB_PASSWORD=... -e PROVIDER_URL=... -e JWT_JWK_SET_URI=... \
+  -e JWT_ISSUER_URI=... -e JWT_AUDIENCE=... \
   ativacao
 ```

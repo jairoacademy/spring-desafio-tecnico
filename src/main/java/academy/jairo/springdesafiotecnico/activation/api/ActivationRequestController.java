@@ -13,6 +13,8 @@ import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -33,8 +35,10 @@ class ActivationRequestController {
 	}
 
 	@PostMapping
-	ResponseEntity<ActivationRequestResponse> create(@Valid @RequestBody CreateActivationRequest body) {
-		CreationResult result = service.create(body.externalId(), body.customerId(), body.productCode());
+	ResponseEntity<ActivationRequestResponse> create(@AuthenticationPrincipal Jwt jwt,
+			@Valid @RequestBody CreateActivationRequest body) {
+		CreationResult result = service.create(clientId(jwt), body.externalId(), body.customerId(),
+				body.productCode());
 		ActivationRequestResponse response = ActivationRequestResponse.from(result.request());
 		if (!result.created()) {
 			// retry idêntico: devolve o registro existente, com o status atual
@@ -48,12 +52,12 @@ class ActivationRequestController {
 	}
 
 	@GetMapping("/{id}")
-	ActivationRequestResponse findById(@PathVariable UUID id) {
-		return ActivationRequestResponse.from(service.findById(id));
+	ActivationRequestResponse findById(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id) {
+		return ActivationRequestResponse.from(service.findById(clientId(jwt), id));
 	}
 
 	@GetMapping
-	PageResponse<ActivationRequestResponse> list(
+	PageResponse<ActivationRequestResponse> list(@AuthenticationPrincipal Jwt jwt,
 			@RequestParam(required = false) @Nullable ActivationStatus status,
 
 			@RequestParam(required = false)
@@ -69,7 +73,16 @@ class ActivationRequestController {
 			@Min(value = 1, message = "deve ser maior ou igual a 1")
 			@Max(value = 100, message = "deve ser menor ou igual a 100")
 			int size) {
-		return PageResponse.from(service.findAll(status, customerId, page, size), ActivationRequestResponse::from);
+		return PageResponse.from(service.findAll(clientId(jwt), status, customerId, page, size),
+				ActivationRequestResponse::from);
+	}
+
+	/**
+	 * Dono da solicitação: claim {@code client_id}, obrigatória e validada no decoder. Lida do {@link Jwt}, e não
+	 * de {@code Authentication.getName()}, que vem de {@code sub}.
+	 */
+	private static String clientId(Jwt jwt) {
+		return jwt.getClaimAsString("client_id");
 	}
 
 }

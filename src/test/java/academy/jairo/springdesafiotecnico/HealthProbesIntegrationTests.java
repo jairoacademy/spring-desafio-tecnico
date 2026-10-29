@@ -33,9 +33,10 @@ class HealthProbesIntegrationTests {
 				.andExpect(jsonPath("$.status").value("UP"));
 	}
 
+	// com token: sem ele, a rota não mapeada responde 401 antes do 404
 	@Test
 	void envEndpointIsNotExposed() throws Exception {
-		mockMvc.perform(get("/actuator/env"))
+		mockMvc.perform(get("/actuator/env").with(TestTokens.readWrite()))
 				.andExpect(status().isNotFound());
 	}
 

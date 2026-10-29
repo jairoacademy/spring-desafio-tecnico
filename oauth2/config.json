@@ -1,0 +1,41 @@
+{
+  "interactiveLogin": false,
+  "tokenCallbacks": [
+    {
+      "issuerId": "default",
+      "tokenExpiry": 900,
+      "requestMappings": [
+        {
+          "requestParam": "client_id",
+          "match": "sistema-a",
+          "claims": {
+            "sub": "sistema-a",
+            "client_id": "sistema-a",
+            "aud": ["ativacao-api"],
+            "scope": "activation:read activation:write"
+          }
+        },
+        {
+          "requestParam": "client_id",
+          "match": "sistema-b",
+          "claims": {
+            "sub": "sistema-b",
+            "client_id": "sistema-b",
+            "aud": ["ativacao-api"],
+            "scope": "activation:read activation:write"
+          }
+        },
+        {
+          "requestParam": "client_id",
+          "match": "sistema-leitura",
+          "claims": {
+            "sub": "sistema-leitura",
+            "client_id": "sistema-leitura",
+            "aud": ["ativacao-api"],
+            "scope": "activation:read"
+          }
+        }
+      ]
+    }
+  ]
+}

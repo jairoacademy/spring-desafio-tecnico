@@ -15,6 +15,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class ActivationRequestTest {
 
+	private static final String OWNER = "sistema-a";
+
 	private static final Instant T0 = Instant.parse("2026-01-10T12:00:00.123456789Z");
 
 	private static final Instant T1 = T0.plusSeconds(10);
@@ -22,7 +24,7 @@ class ActivationRequestTest {
 	private static final Instant T2 = T0.plusSeconds(20);
 
 	private static ActivationRequest newRequest() {
-		return ActivationRequest.create("EXT-1", "CUST-1", "INTERNET-500", T0);
+		return ActivationRequest.create(OWNER, "EXT-1", "CUST-1", "INTERNET-500", T0);
 	}
 
 	private static ActivationRequest processingRequest() {
@@ -37,6 +39,7 @@ class ActivationRequestTest {
 
 		Instant truncated = T0.truncatedTo(ChronoUnit.MICROS);
 		assertThat(request.getId()).isNotNull();
+		assertThat(request.getClientId()).isEqualTo(OWNER);
 		assertThat(request.getExternalId()).isEqualTo("EXT-1");
 		assertThat(request.getCustomerId()).isEqualTo("CUST-1");
 		assertThat(request.getProductCode()).isEqualTo("INTERNET-500");

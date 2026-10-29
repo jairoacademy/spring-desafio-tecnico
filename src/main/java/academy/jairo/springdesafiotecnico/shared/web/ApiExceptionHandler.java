@@ -6,8 +6,6 @@ import java.util.Map;
 
 import academy.jairo.springdesafiotecnico.activation.application.ActivationRequestConflictException;
 import academy.jairo.springdesafiotecnico.activation.application.ActivationRequestNotFoundException;
-import io.micrometer.tracing.Span;
-import io.micrometer.tracing.Tracer;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,10 +37,10 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 
 	private static final String VALIDATION_TITLE = "Dados inválidos";
 
-	private final Tracer tracer;
+	private final ProblemDetails problemDetails;
 
-	ApiExceptionHandler(Tracer tracer) {
-		this.tracer = tracer;
+	ApiExceptionHandler(ProblemDetails problemDetails) {
+		this.problemDetails = problemDetails;
 	}
 
 	@Override
@@ -98,10 +96,15 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 	@ExceptionHandler(ActivationRequestConflictException.class)
 	@Nullable ResponseEntity<Object> handleConflict(ActivationRequestConflictException ex, WebRequest request) {
 		// sem id nem valores do registro existente: só quem o criou deve lê-lo
+		List<String> conflictingFields = ex.getConflictingFields();
+		// lista vazia: externalId de outro cliente, sem nada que revele o registro dele
+		String detail = conflictingFields.isEmpty() ? "O externalId " + ex.getExternalId() + " já está em uso."
+				: "Já existe solicitação com externalId " + ex.getExternalId() + " e conteúdo diferente.";
 		ProblemDetail problem = problem(HttpStatus.CONFLICT, ProblemTypes.DUPLICATE_EXTERNAL_ID,
-				"Solicitação duplicada",
-				"Já existe solicitação com externalId " + ex.getExternalId() + " e conteúdo diferente.");
-		problem.setProperty("conflictingFields", ex.getConflictingFields());
+				"Solicitação duplicada", detail);
+		if (!conflictingFields.isEmpty()) {
+			problem.setProperty("conflictingFields", conflictingFields);
+		}
 		return handleExceptionInternal(ex, problem, new HttpHeaders(), HttpStatus.CONFLICT, request);
 	}
 
@@ -117,26 +120,9 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 	protected ResponseEntity<Object> createResponseEntity(@Nullable Object body, HttpHeaders headers,
 			HttpStatusCode statusCode, WebRequest request) {
 		if (body instanceof ProblemDetail problem) {
-			if (problem.getType() == null) {
-				// erros do MVC sem type próprio (405, 415, ...): valor padrão do RFC 9457, explícito no JSON
-				problem.setType(ProblemTypes.ABOUT_BLANK);
-			}
-			problem.setInstance(URI.create(path(request)));
-			String traceId = currentTraceId();
-			if (traceId != null) {
-				problem.setProperty("traceId", traceId);
-			}
+			problemDetails.complete(problem, path(request));
 		}
 		return super.createResponseEntity(body, headers, statusCode, request);
-	}
-
-	private @Nullable String currentTraceId() {
-		Span span = tracer.currentSpan();
-		if (span == null) {
-			return null;
-		}
-		String traceId = span.context().traceId();
-		return traceId.isEmpty() ? null : traceId;
 	}
 
 	private static ProblemDetail validationProblem(List<Map<String, String>> errors) {

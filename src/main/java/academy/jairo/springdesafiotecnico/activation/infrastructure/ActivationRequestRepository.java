@@ -16,6 +16,9 @@ public interface ActivationRequestRepository
 	// Comparação exata (diferencia caixa), atendida pelo índice da constraint uq_activation_request_external_id.
 	Optional<ActivationRequest> findByExternalId(String externalId);
 
+	// Consulta da API: id de outro dono fica igual a id inexistente (BOLA, ADR 0004).
+	Optional<ActivationRequest> findByIdAndClientId(UUID id, String clientId);
+
 	/**
 	 * Reserva do worker: {@code PENDING} vencidas, bloqueadas até o fim da transação. {@code SKIP LOCKED}
 	 * pula as linhas já bloqueadas por outra execução, sem esperar. Atendida por ix_activation_request_pending_due.

@@ -7,7 +7,7 @@ meta {
 get {
   url: {{baseUrl}}/api/v1/requests?customerId={{customerId}}
   body: none
-  auth: none
+  auth: inherit
 }
 
 tests {
@@ -24,5 +24,7 @@ tests {
 
 docs {
   Filtra por `customerId` do environment. Ordem fixa: `createdAt` decrescente.
-  Essa consulta usa o índice `(customer_id, created_at DESC)`: já vem na ordem, sem sort.
+  Só aparecem solicitações do sistema do token (`sistema-a`, auth da collection): o dono
+  entra em toda listagem. Essa consulta usa o índice `(client_id, customer_id, created_at DESC)`:
+  já vem na ordem, sem sort.
 }

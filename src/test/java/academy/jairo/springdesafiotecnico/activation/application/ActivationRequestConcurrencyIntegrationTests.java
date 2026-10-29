@@ -42,7 +42,7 @@ class ActivationRequestConcurrencyIntegrationTests {
 			for (int i = 0; i < THREADS; i++) {
 				futures.add(executor.submit(() -> {
 					start.await();
-					return service.create(externalId, "CUST-RACE", "INTERNET-500");
+					return service.create("sistema-a", externalId, "CUST-RACE", "INTERNET-500");
 				}));
 			}
 			start.countDown();

@@ -1,0 +1,41 @@
+meta {
+  name: sistema-b consulta de sistema-a
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/api/v1/requests/{{ownedRequestId}}
+  body: none
+  auth: oauth2
+}
+
+auth:oauth2 {
+  grant_type: client_credentials
+  access_token_url: {{tokenUrl}}
+  client_id: sistema-b
+  client_secret: dev
+  scope: activation:read activation:write
+  credentials_placement: body
+  credentials_id: sistema-b
+  token_placement: header
+  token_header_prefix: Bearer
+  auto_fetch_token: true
+  auto_refresh_token: false
+}
+
+tests {
+  test("404 igual ao de id inexistente", function() {
+    expect(res.status).to.equal(404);
+    expect(res.body.type).to.equal("https://problems.ativacao.example/not-found");
+    expect(res.body.detail).to.equal("Não existe solicitação com id " + bru.getVar("ownedRequestId") + ".");
+  });
+}
+
+docs {
+  `sistema-b` tem os dois escopos, mas a solicitação é de `sistema-a`. A resposta é `404`,
+  e não `403`: assim um id de outro cliente é indistinguível de um id inexistente
+  (OWASP API1:2023, BOLA). Compare com `02 Consultar / Consultar inexistente`.
+
+  **Experimente:** a listagem de `sistema-b` também não mostra a solicitação de `sistema-a`.
+}

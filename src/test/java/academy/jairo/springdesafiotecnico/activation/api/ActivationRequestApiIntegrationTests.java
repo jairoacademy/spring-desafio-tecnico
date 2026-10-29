@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import academy.jairo.springdesafiotecnico.TestTokens;
 import academy.jairo.springdesafiotecnico.TestcontainersConfiguration;
 import academy.jairo.springdesafiotecnico.activation.domain.ActivationRequest;
 import academy.jairo.springdesafiotecnico.activation.domain.FailureReason;
@@ -20,6 +21,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.ResultActions;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.contains;
@@ -80,6 +82,21 @@ class ActivationRequestApiIntegrationTests {
 	}
 
 	@Test
+	void storesOwnerFromTokenWithoutExposingIt() throws Exception {
+		mockMvc
+			.perform(post("/api/v1/requests").with(TestTokens.client("sistema-a", TestTokens.WRITE))
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(validBody("EXT-OWNER-STORED")))
+			.andExpect(status().isCreated())
+			.andExpect(jsonPath("$.clientId").doesNotExist())
+			.andExpect(jsonPath("$.client_id").doesNotExist());
+
+		assertThat(repository.findByExternalId("EXT-OWNER-STORED")).get()
+			.extracting(ActivationRequest::getClientId)
+			.isEqualTo("sistema-a");
+	}
+
+	@Test
 	void locationHeaderPointsToCreatedId() throws Exception {
 		MvcResult result = postRequest(validBody("EXT-LOC")).andExpect(status().isCreated()).andReturn();
 
@@ -106,7 +123,7 @@ class ActivationRequestApiIntegrationTests {
 		MvcResult created = postRequest(validBody("EXT-PERSIST")).andExpect(status().isCreated()).andReturn();
 		String location = created.getResponse().getHeader("Location");
 
-		MvcResult fetched = mockMvc.perform(get(location)).andExpect(status().isOk()).andReturn();
+		MvcResult fetched = perform(get(location)).andExpect(status().isOk()).andReturn();
 
 		Map<String, Object> createdBody = JsonPath.read(created.getResponse().getContentAsString(), "$");
 		Map<String, Object> fetchedBody = JsonPath.read(fetched.getResponse().getContentAsString(), "$");
@@ -118,7 +135,7 @@ class ActivationRequestApiIntegrationTests {
 		MvcResult created = postRequest(validBody("EXT-GET")).andExpect(status().isCreated()).andReturn();
 		String id = JsonPath.read(created.getResponse().getContentAsString(), "$.id");
 
-		mockMvc.perform(get("/api/v1/requests/{id}", id))
+		perform(get("/api/v1/requests/{id}", id))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.id").value(id))
 			.andExpect(jsonPath("$.externalId").value("EXT-GET"))
@@ -173,28 +190,47 @@ class ActivationRequestApiIntegrationTests {
 	@Test
 	void returnsNotFoundForUnknownId() throws Exception {
 		UUID unknown = UUID.randomUUID();
-		expectProblem(mockMvc.perform(get("/api/v1/requests/{id}", unknown)), 404)
+		expectProblem(perform(get("/api/v1/requests/{id}", unknown)), 404)
 			.andExpect(jsonPath("$.type").value("https://problems.ativacao.example/not-found"))
 			.andExpect(jsonPath("$.title").value("Solicitação não encontrada"))
 			.andExpect(jsonPath("$.instance").value("/api/v1/requests/" + unknown));
 	}
 
 	@Test
+	void requestOfAnotherClientIsNotFoundLikeUnknownId() throws Exception {
+		String id = createAs("sistema-a", validBody("EXT-BOLA"));
+		UUID unknown = UUID.randomUUID();
+
+		MvcResult foreign = expectProblem(mockMvc.perform(get("/api/v1/requests/{id}", id)
+			.with(TestTokens.client("sistema-b", TestTokens.READ))), 404).andReturn();
+		MvcResult missing = expectProblem(mockMvc.perform(get("/api/v1/requests/{id}", unknown)
+			.with(TestTokens.client("sistema-b", TestTokens.READ))), 404).andReturn();
+
+		String foreignJson = foreign.getResponse().getContentAsString();
+		String missingJson = missing.getResponse().getContentAsString();
+		assertThat(JsonPath.<String>read(foreignJson, "$.type")).isEqualTo(JsonPath.read(missingJson, "$.type"));
+		assertThat(JsonPath.<String>read(foreignJson, "$.title")).isEqualTo(JsonPath.read(missingJson, "$.title"));
+		assertThat(JsonPath.<String>read(foreignJson, "$.detail"))
+			.isEqualTo(JsonPath.<String>read(missingJson, "$.detail").replace(unknown.toString(), id));
+		assertThat(foreignJson).doesNotContain("EXT-BOLA", "CUST-10001", "sistema-a");
+	}
+
+	@Test
 	void rejectsIdThatIsNotUuid() throws Exception {
-		expectProblem(mockMvc.perform(get("/api/v1/requests/abc")), 400)
+		expectProblem(perform(get("/api/v1/requests/abc")), 400)
 			.andExpect(jsonPath("$.type").value("https://problems.ativacao.example/invalid-parameter"))
 			.andExpect(jsonPath("$.instance").value("/api/v1/requests/abc"));
 	}
 
 	@Test
 	void rejectsUnsupportedMethod() throws Exception {
-		expectProblem(mockMvc.perform(delete("/api/v1/requests/{id}", UUID.randomUUID())), 405);
+		expectProblem(perform(delete("/api/v1/requests/{id}", UUID.randomUUID())), 405);
 	}
 
 	@Test
 	void traceIdIsDistinctPerRequest() throws Exception {
-		String first = traceIdOf(expectProblem(mockMvc.perform(get("/api/v1/requests/{id}", UUID.randomUUID())), 404));
-		String second = traceIdOf(expectProblem(mockMvc.perform(get("/api/v1/requests/{id}", UUID.randomUUID())), 404));
+		String first = traceIdOf(expectProblem(perform(get("/api/v1/requests/{id}", UUID.randomUUID())), 404));
+		String second = traceIdOf(expectProblem(perform(get("/api/v1/requests/{id}", UUID.randomUUID())), 404));
 
 		assertThat(first).isNotEqualTo(second);
 	}
@@ -207,7 +243,7 @@ class ActivationRequestApiIntegrationTests {
 		postRequest(body("EXT-A2", customerA)).andExpect(status().isCreated());
 		postRequest(body("EXT-B1", customerB)).andExpect(status().isCreated());
 
-		mockMvc.perform(get("/api/v1/requests").param("customerId", customerA))
+		perform(get("/api/v1/requests").param("customerId", customerA))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.content.length()").value(2))
 			.andExpect(jsonPath("$.content[*].customerId").value(everyItem(is(customerA))))
@@ -215,17 +251,32 @@ class ActivationRequestApiIntegrationTests {
 	}
 
 	@Test
+	void listsOnlyRequestsOfAuthenticatedClient() throws Exception {
+		String customer = uniqueCustomer("CUST-SHARED");
+		createAs("sistema-a", body("EXT-SHARED-A1", customer));
+		createAs("sistema-a", body("EXT-SHARED-A2", customer));
+		createAs("sistema-b", body("EXT-SHARED-B1", customer));
+
+		mockMvc.perform(get("/api/v1/requests").param("customerId", customer)
+			.with(TestTokens.client("sistema-b", TestTokens.READ)))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.content.length()").value(1))
+			.andExpect(jsonPath("$.content[0].externalId").value("EXT-SHARED-B1"))
+			.andExpect(jsonPath("$.totalElements").value(1));
+	}
+
+	@Test
 	void combinesStatusAndCustomerFilters() throws Exception {
 		String customer = uniqueCustomer("CUST-A");
 		postRequest(body("EXT-PENDING", customer)).andExpect(status().isCreated());
 		// nenhum endpoint desta change muda status: a solicitação PROCESSING é gravada direto pelo repositório
-		ActivationRequest processing = ActivationRequest.create("EXT-PROCESSING", customer, "INTERNET-500",
-				Instant.now());
+		ActivationRequest processing = ActivationRequest.create(TestTokens.DEFAULT_CLIENT, "EXT-PROCESSING", customer,
+				"INTERNET-500", Instant.now());
 		processing.startProcessing(Instant.now());
 		repository.save(processing);
 		postRequest(body("EXT-OTHER", uniqueCustomer("CUST-B"))).andExpect(status().isCreated());
 
-		mockMvc.perform(get("/api/v1/requests").param("status", "PENDING").param("customerId", customer))
+		perform(get("/api/v1/requests").param("status", "PENDING").param("customerId", customer))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.content.length()").value(1))
 			.andExpect(jsonPath("$.content[0].externalId").value("EXT-PENDING"))
@@ -237,17 +288,17 @@ class ActivationRequestApiIntegrationTests {
 	void exposesFailureReasonOfFailedRequest() throws Exception {
 		String customer = uniqueCustomer("CUST-F");
 		// a falha é gravada direto pelo repositório, sem passar pelo provedor
-		ActivationRequest failed = ActivationRequest.create("EXT-FAILED-" + customer, customer, "INTERNET-500",
-				Instant.now());
+		ActivationRequest failed = ActivationRequest.create(TestTokens.DEFAULT_CLIENT, "EXT-FAILED-" + customer,
+				customer, "INTERNET-500", Instant.now());
 		failed.startProcessing(Instant.now());
 		failed.fail(FailureReason.MAX_ATTEMPTS_EXCEEDED, Instant.now());
 		repository.save(failed);
 
-		mockMvc.perform(get("/api/v1/requests/{id}", failed.getId()))
+		perform(get("/api/v1/requests/{id}", failed.getId()))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.status").value("FAILED"))
 			.andExpect(jsonPath("$.failureReason").value("MAX_ATTEMPTS_EXCEEDED"));
-		mockMvc.perform(get("/api/v1/requests").param("status", "FAILED").param("customerId", customer))
+		perform(get("/api/v1/requests").param("status", "FAILED").param("customerId", customer))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.content.length()").value(1))
 			.andExpect(jsonPath("$.content[0].id").value(failed.getId().toString()))
@@ -261,7 +312,7 @@ class ActivationRequestApiIntegrationTests {
 		postRequest(body("EXT-P2", customer)).andExpect(status().isCreated());
 		postRequest(body("EXT-P3", customer)).andExpect(status().isCreated());
 
-		mockMvc.perform(get("/api/v1/requests").param("customerId", customer).param("page", "0").param("size", "2"))
+		perform(get("/api/v1/requests").param("customerId", customer).param("page", "0").param("size", "2"))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.content.length()").value(2))
 			.andExpect(jsonPath("$.content[0].externalId").value("EXT-P3"))
@@ -274,7 +325,7 @@ class ActivationRequestApiIntegrationTests {
 
 	@Test
 	void usesDefaultPagination() throws Exception {
-		mockMvc.perform(get("/api/v1/requests").param("customerId", uniqueCustomer("CUST-EMPTY")))
+		perform(get("/api/v1/requests").param("customerId", uniqueCustomer("CUST-EMPTY")))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.page").value(0))
 			.andExpect(jsonPath("$.size").value(20))
@@ -283,20 +334,20 @@ class ActivationRequestApiIntegrationTests {
 
 	@Test
 	void rejectsUnknownStatusFilter() throws Exception {
-		expectProblem(mockMvc.perform(get("/api/v1/requests").param("status", "DONE")), 400)
+		expectProblem(perform(get("/api/v1/requests").param("status", "DONE")), 400)
 			.andExpect(jsonPath("$.type").value("https://problems.ativacao.example/invalid-parameter"));
 	}
 
 	@Test
 	void rejectsPageSizeAboveLimit() throws Exception {
-		expectProblem(mockMvc.perform(get("/api/v1/requests").param("size", "101")), 400)
+		expectProblem(perform(get("/api/v1/requests").param("size", "101")), 400)
 			.andExpect(jsonPath("$.type").value(VALIDATION_TYPE))
 			.andExpect(jsonPath("$.errors[*].field").value(hasItem("size")));
 	}
 
 	@Test
 	void rejectsNegativePage() throws Exception {
-		expectProblem(mockMvc.perform(get("/api/v1/requests").param("page", "-1")), 400)
+		expectProblem(perform(get("/api/v1/requests").param("page", "-1")), 400)
 			.andExpect(jsonPath("$.type").value(VALIDATION_TYPE))
 			.andExpect(jsonPath("$.errors[*].field").value(hasItem("page")));
 	}
@@ -308,7 +359,7 @@ class ActivationRequestApiIntegrationTests {
 				{"externalId":"EXT-1","customerId":"%s","productCode":"internet 500"}""".formatted(customer))
 			.andExpect(status().isBadRequest());
 
-		mockMvc.perform(get("/api/v1/requests").param("customerId", customer))
+		perform(get("/api/v1/requests").param("customerId", customer))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.content.length()").value(0))
 			.andExpect(jsonPath("$.totalElements").value(0));
@@ -390,6 +441,66 @@ class ActivationRequestApiIntegrationTests {
 	}
 
 	@Test
+	void sameContentFromAnotherClientIsConflictWithoutDetails() throws Exception {
+		String body = """
+				{"externalId":"EXT-OWNER","customerId":"CUST-1","productCode":"INTERNET-500"}""";
+		createAs("sistema-a", body);
+
+		MvcResult conflict = expectProblem(postAs("sistema-b", body), 409)
+			.andExpect(jsonPath("$.type").value(DUPLICATE_TYPE))
+			.andExpect(jsonPath("$.conflictingFields").doesNotExist())
+			.andExpect(jsonPath("$.id").doesNotExist())
+			.andReturn();
+
+		assertThat(conflict.getResponse().getContentAsString()).doesNotContain("CUST-1", "INTERNET-500", "sistema-a",
+				"PENDING");
+	}
+
+	@Test
+	void differentContentFromAnotherClientIsSameConflictWithoutDetails() throws Exception {
+		createAs("sistema-a", """
+				{"externalId":"EXT-OWNER-2","customerId":"CUST-1","productCode":"INTERNET-500"}""");
+
+		MvcResult identical = expectProblem(postAs("sistema-b", """
+				{"externalId":"EXT-OWNER-2","customerId":"CUST-1","productCode":"INTERNET-500"}"""), 409).andReturn();
+		MvcResult divergent = expectProblem(postAs("sistema-b", """
+				{"externalId":"EXT-OWNER-2","customerId":"CUST-1","productCode":"INTERNET-900"}"""), 409)
+			.andExpect(jsonPath("$.conflictingFields").doesNotExist())
+			.andReturn();
+
+		Map<String, Object> identicalBody = JsonPath.read(identical.getResponse().getContentAsString(), "$");
+		Map<String, Object> divergentBody = JsonPath.read(divergent.getResponse().getContentAsString(), "$");
+		identicalBody.remove("traceId");
+		divergentBody.remove("traceId");
+		assertThat(divergentBody).isEqualTo(identicalBody);
+	}
+
+	@Test
+	void conflictFromAnotherClientDoesNotChangeOwnersRequest() throws Exception {
+		String id = createAs("sistema-a", """
+				{"externalId":"EXT-OWNER-3","customerId":"CUST-1","productCode":"INTERNET-500"}""");
+		MvcResult before = mockMvc
+			.perform(get("/api/v1/requests/{id}", id).with(TestTokens.client("sistema-a", TestTokens.READ)))
+			.andExpect(status().isOk())
+			.andReturn();
+
+		postAs("sistema-b", """
+				{"externalId":"EXT-OWNER-3","customerId":"CUST-2","productCode":"INTERNET-900"}""")
+			.andExpect(status().isConflict());
+
+		MvcResult after = mockMvc
+			.perform(get("/api/v1/requests/{id}", id).with(TestTokens.client("sistema-a", TestTokens.READ)))
+			.andExpect(status().isOk())
+			.andReturn();
+		Map<String, Object> beforeBody = JsonPath.read(before.getResponse().getContentAsString(), "$");
+		Map<String, Object> afterBody = JsonPath.read(after.getResponse().getContentAsString(), "$");
+		assertThat(afterBody).isEqualTo(beforeBody);
+		assertThat(repository.findByExternalId("EXT-OWNER-3")).get()
+			.extracting(ActivationRequest::getClientId)
+			.isEqualTo("sistema-a");
+	}
+
+	@Test
 	void conflictDoesNotChangeExistingRequest() throws Exception {
 		MvcResult created = postRequest("""
 				{"externalId":"EXT-CONF-3","customerId":"CUST-1","productCode":"INTERNET-500"}""")
@@ -400,7 +511,7 @@ class ActivationRequestApiIntegrationTests {
 				{"externalId":"EXT-CONF-3","customerId":"CUST-2","productCode":"INTERNET-900"}""")
 			.andExpect(status().isConflict());
 
-		MvcResult fetched = mockMvc.perform(get(created.getResponse().getHeader("Location")))
+		MvcResult fetched = perform(get(created.getResponse().getHeader("Location")))
 			.andExpect(status().isOk())
 			.andReturn();
 
@@ -424,7 +535,23 @@ class ActivationRequestApiIntegrationTests {
 	}
 
 	private ResultActions postRequest(String body) throws Exception {
-		return mockMvc.perform(post("/api/v1/requests").contentType(MediaType.APPLICATION_JSON).content(body));
+		return perform(post("/api/v1/requests").contentType(MediaType.APPLICATION_JSON).content(body));
+	}
+
+	/** Cria como {@code clientId} e devolve o {@code id}. */
+	private String createAs(String clientId, String body) throws Exception {
+		MvcResult result = postAs(clientId, body).andExpect(status().isCreated()).andReturn();
+		return JsonPath.read(result.getResponse().getContentAsString(), "$.id");
+	}
+
+	private ResultActions postAs(String clientId, String body) throws Exception {
+		return mockMvc.perform(post("/api/v1/requests").with(TestTokens.client(clientId, TestTokens.WRITE))
+			.contentType(MediaType.APPLICATION_JSON)
+			.content(body));
+	}
+
+	private ResultActions perform(MockHttpServletRequestBuilder request) throws Exception {
+		return mockMvc.perform(request.with(TestTokens.readWrite()));
 	}
 
 	private static String uniqueCustomer(String prefix) {
