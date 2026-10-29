@@ -21,7 +21,7 @@
 
 ## 5. Ambiente com Docker Compose
 
-- [ ] 5.1 Criar `wiremock/mappings/provider-activate-success.json` (`POST /provider/v1/activate` → `200`) e adicionar o serviço `wiremock` (versão 3.x fixada, porta `8089`, health check em `/__admin/health`) ao `compose.yaml`; verificar com `docker compose up -d --wait wiremock` e `curl -X POST localhost:8089/provider/v1/activate` retornando `200`
+- [x] 5.1 Criar `wiremock/mappings/provider-activate-success.json` (`POST /provider/v1/activate` → `200`) e adicionar o serviço `wiremock` (versão 3.x fixada, porta `8089`, health check em `/__admin/health`) ao `compose.yaml`; verificar com `docker compose up -d --wait wiremock` e `curl -X POST localhost:8089/provider/v1/activate` retornando `200`
 - [ ] 5.2 Adicionar o serviço `app` ao `compose.yaml` (`build: .`, `DB_*` apontando para `postgres`, `depends_on` com `service_healthy`); verificar com `docker compose up --build --wait` deixando os três serviços `healthy` e `curl localhost:8080/actuator/health/readiness` com `UP`
 - [ ] 5.3 Atualizar o README: subir tudo com `docker compose up --build`, nota de que o `compose.yaml` cumpre o `docker-compose.yml` pedido na seção Entrega e portas de cada serviço; verificar que os comandos citados rodam como escritos
 

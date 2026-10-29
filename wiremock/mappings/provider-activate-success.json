@@ -1,0 +1,9 @@
+{
+  "request": {
+    "method": "POST",
+    "url": "/provider/v1/activate"
+  },
+  "response": {
+    "status": 200
+  }
+}
