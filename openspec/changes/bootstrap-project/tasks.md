@@ -8,7 +8,7 @@
 
 ## 2. Null-safety
 
-- [ ] 2.1 Criar `package-info.java` com `@NullMarked` no pacote `academy.jairo.springdesafiotecnico` e verificar que `./mvnw verify` compila sem dependência nova no `pom.xml`
+- [x] 2.1 Criar `package-info.java` com `@NullMarked` no pacote `academy.jairo.springdesafiotecnico` e verificar que `./mvnw verify` compila sem dependência nova no `pom.xml`
 
 ## 3. ADR da versão do Spring Boot
 
