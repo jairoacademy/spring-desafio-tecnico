@@ -3,7 +3,7 @@
 ## 1. Domínio
 
 - [x] 1.1 Criar pacotes `activation.{api,application,domain,infrastructure}` e `shared.web`, cada um com `package-info.java` `@NullMarked`; verificar com `./mvnw compile`
-- [ ] 1.2 Criar `ActivationStatus` com `canTransitionTo` e `InvalidStatusTransitionException`; teste unitário `ActivationStatusTest` (sem Spring) cobrindo as 4 transições permitidas e todas as proibidas via `@ParameterizedTest`
+- [x] 1.2 Criar `ActivationStatus` com `canTransitionTo` e `InvalidStatusTransitionException`; teste unitário `ActivationStatusTest` (sem Spring) cobrindo as 4 transições permitidas e todas as proibidas via `@ParameterizedTest`
 - [ ] 1.3 Criar `ActivationRequest` (`@Entity`, construtor `protected`, fábrica `create`, `startProcessing`, `complete`, `fail`, `scheduleRetry`, `@Version Long`, instantes truncados em microssegundos); teste unitário `ActivationRequestTest` cobrindo estado inicial (`attempts` 0, `nextAttemptAt` = `createdAt`), caminhos de sucesso e falha, `scheduleRetry` e transição rejeitada sem alterar status nem `updatedAt`
 
 ## 2. Persistência
