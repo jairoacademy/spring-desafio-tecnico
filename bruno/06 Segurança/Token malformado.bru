@@ -1,0 +1,33 @@
+meta {
+  name: Token malformado
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/v1/requests
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer abc
+}
+
+tests {
+  test("401 sem repetir o token nem o motivo", function() {
+    expect(res.status).to.equal(401);
+    expect(res.body.type).to.equal("https://problems.ativacao.example/unauthorized");
+    expect(res.body.detail).to.equal("Token de acesso ausente ou inválido.");
+    expect(JSON.stringify(res.body)).to.not.contain("abc");
+  });
+}
+
+docs {
+  `abc` não é um JWT. O `detail` é fixo: não repete o token nem a mensagem interna da
+  validação. O motivo padrão da RFC 6750 vai só no header `WWW-Authenticate`.
+
+  Assinatura, emissor, audiência, expiração e `client_id` também resultam em `401`; esses
+  casos estão em `JwtValidationIntegrationTests`, porque o emissor de desenvolvimento não
+  gera tokens inválidos.
+}

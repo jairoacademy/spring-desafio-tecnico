@@ -47,8 +47,9 @@ docs {
   Mesmo `externalId` com outro pedido: conflito real, que exige ação humana. `409` em
   ProblemDetail, com a lista `conflictingFields`.
 
-  A resposta não traz o `id` nem os valores do registro existente. Quando a etapa de
-  segurança chegar, outro cliente não vai conseguir ler a solicitação alheia por aqui.
+  A resposta não traz o `id` nem os valores do registro existente. `conflictingFields` só
+  aparece porque o registro é do mesmo sistema (`sistema-a`). Se o `externalId` fosse de
+  outro sistema, o `409` viria sem detalhes: ver `06 Segurança / sistema-b com externalId de sistema-a`.
 
   **Experimente:** rode `02 Consultar / Consultar criada` depois. `productCode` e
   `updatedAt` continuam os da criação.

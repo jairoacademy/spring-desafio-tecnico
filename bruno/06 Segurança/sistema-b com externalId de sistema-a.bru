@@ -1,0 +1,56 @@
+meta {
+  name: sistema-b com externalId de sistema-a
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{baseUrl}}/api/v1/requests
+  body: json
+  auth: oauth2
+}
+
+headers {
+  Content-Type: application/json
+}
+
+auth:oauth2 {
+  grant_type: client_credentials
+  access_token_url: {{tokenUrl}}
+  client_id: sistema-b
+  client_secret: dev
+  scope: activation:read activation:write
+  credentials_placement: body
+  credentials_id: sistema-b
+  token_placement: header
+  token_header_prefix: Bearer
+  auto_fetch_token: true
+  auto_refresh_token: false
+}
+
+body:json {
+  {
+    "externalId": "{{securityExternalId}}",
+    "customerId": "{{customerId}}",
+    "productCode": "INTERNET-500"
+  }
+}
+
+tests {
+  test("409 sem conflictingFields nem dados do registro", function() {
+    expect(res.status).to.equal(409);
+    expect(res.body.type).to.equal("https://problems.ativacao.example/duplicate-external-id");
+    expect(res.body).to.not.have.property("conflictingFields");
+    expect(res.body).to.not.have.property("id");
+    expect(JSON.stringify(res.body)).to.not.contain(bru.getVar("ownedRequestId"));
+  });
+}
+
+docs {
+  Mesmo corpo que `sistema-a cria`, enviado por `sistema-b`. O `externalId` é único global
+  (ADR 0001), então é conflito, mas sem `conflictingFields`, com conteúdo igual ou diferente:
+  devolver `200` vazaria o `id` e o status, e os campos divergentes permitiriam descobrir por
+  tentativa o `customerId` e o `productCode` alheios (ADR 0004).
+
+  **Experimente:** troque o `productCode`: a resposta é a mesma.
+}
