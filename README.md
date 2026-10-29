@@ -1,5 +1,7 @@
 # Serviço de ativação de produtos
 
+[![CI](https://github.com/jairoacademy/spring-desafio-tecnico/actions/workflows/ci.yml/badge.svg)](https://github.com/jairoacademy/spring-desafio-tecnico/actions/workflows/ci.yml)
+
 Desafio técnico Java (Spring Boot 4.1.2, Java 21), desenvolvido com Spec-Driven Development (OpenSpec + Claude Code).
 
 - Enunciado: [docs/desafio-tecnico-java.md](docs/desafio-tecnico-java.md)
