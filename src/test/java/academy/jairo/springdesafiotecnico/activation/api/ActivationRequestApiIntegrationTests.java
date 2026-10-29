@@ -82,6 +82,21 @@ class ActivationRequestApiIntegrationTests {
 	}
 
 	@Test
+	void storesOwnerFromTokenWithoutExposingIt() throws Exception {
+		mockMvc
+			.perform(post("/api/v1/requests").with(TestTokens.client("sistema-a", TestTokens.WRITE))
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(validBody("EXT-OWNER-STORED")))
+			.andExpect(status().isCreated())
+			.andExpect(jsonPath("$.clientId").doesNotExist())
+			.andExpect(jsonPath("$.client_id").doesNotExist());
+
+		assertThat(repository.findByExternalId("EXT-OWNER-STORED")).get()
+			.extracting(ActivationRequest::getClientId)
+			.isEqualTo("sistema-a");
+	}
+
+	@Test
 	void locationHeaderPointsToCreatedId() throws Exception {
 		MvcResult result = postRequest(validBody("EXT-LOC")).andExpect(status().isCreated()).andReturn();
 
