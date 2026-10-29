@@ -1,0 +1,28 @@
+vars:pre-request {
+  baseUrl: http://localhost:8090
+  customerId: CUST-BRUNO
+  providerUrl: http://localhost:8089
+}
+
+docs {
+  # Serviço de Ativação
+
+  Collection para explorar a API manualmente.
+
+  **Antes de usar**
+  1. `docker compose up -d postgres wiremock` (o WireMock simula o provedor externo)
+  2. Rodar `SpringdesafiotecnicoApplication` no IntelliJ com o perfil `local` e a variável
+     de ambiente `SERVER_PORT=8090` (o IIS do Windows ocupa 8080 e 8081)
+  3. Opcional: selecionar o environment **local** (canto superior direito). Sem ele, valem
+     `baseUrl` e `customerId` definidos na collection (Collection Settings > Vars)
+
+  **Ordem sugerida:** rode `01 Criar / Criar solicitação válida` primeiro. Ele grava
+  `externalId`, `requestId` e `location`, usados por `02 Consultar` e `04 Duplicidade`.
+  `05 Provedor` é independente: cria as próprias solicitações e mexe nos stubs do WireMock
+  pela API de administração (`providerUrl`).
+
+  **Exercício de correlação:** em qualquer resposta de erro, copie o `traceId` e procure
+  no console do IntelliJ. Toda linha de log daquela requisição tem `[traceId-spanId]`.
+
+  Cada request tem uma aba **Docs** com o que observar e uma aba **Tests** com asserts.
+}

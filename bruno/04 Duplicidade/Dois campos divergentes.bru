@@ -1,0 +1,35 @@
+meta {
+  name: Dois campos divergentes
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/v1/requests
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "externalId": "{{externalId}}",
+    "customerId": "CUST-OUTRO",
+    "productCode": "INTERNET-900"
+  }
+}
+
+tests {
+  test("409 com os dois campos na ordem do JSON", function() {
+    expect(res.status).to.equal(409);
+    expect(res.body.type).to.equal("https://problems.ativacao.example/duplicate-external-id");
+    expect(res.body.conflictingFields).to.deep.equal(["customerId", "productCode"]);
+  });
+}
+
+docs {
+  `conflictingFields` lista todos os campos divergentes, na ordem do JSON da criação.
+}

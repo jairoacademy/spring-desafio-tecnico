@@ -1,0 +1,6 @@
+{
+  "version": "1",
+  "name": "Serviço de Ativação",
+  "type": "collection",
+  "ignore": ["node_modules", ".git"]
+}

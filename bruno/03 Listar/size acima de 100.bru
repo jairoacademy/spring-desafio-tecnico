@@ -1,0 +1,24 @@
+meta {
+  name: size acima de 100
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/api/v1/requests?size=101
+  body: none
+  auth: none
+}
+
+tests {
+  test("400 validation-error citando size", function() {
+    expect(res.status).to.equal(400);
+    expect(res.body.type).to.equal("https://problems.ativacao.example/validation-error");
+    expect(res.body.errors.map(e => e.field)).to.include("size");
+  });
+}
+
+docs {
+  Validação de parâmetro (`@Max(100)`), tratada em `handleHandlerMethodValidationException`.
+  Mesmo formato `errors[]` da validação do corpo.
+}

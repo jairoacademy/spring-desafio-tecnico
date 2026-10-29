@@ -7,6 +7,7 @@ import java.util.UUID;
 
 import academy.jairo.springdesafiotecnico.TestcontainersConfiguration;
 import academy.jairo.springdesafiotecnico.activation.domain.ActivationRequest;
+import academy.jairo.springdesafiotecnico.activation.domain.FailureReason;
 import academy.jairo.springdesafiotecnico.activation.infrastructure.ActivationRequestRepository;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.Test;
@@ -29,6 +30,7 @@ import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.hasItems;
 import static org.hamcrest.Matchers.matchesPattern;
 import static org.hamcrest.Matchers.not;
+import static org.hamcrest.Matchers.nullValue;
 import static org.hamcrest.Matchers.blankOrNullString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -71,6 +73,7 @@ class ActivationRequestApiIntegrationTests {
 			.andExpect(jsonPath("$.customerId").value("CUST-10001"))
 			.andExpect(jsonPath("$.productCode").value("INTERNET-500"))
 			.andExpect(jsonPath("$.status").value("PENDING"))
+			.andExpect(jsonPath("$.failureReason").value(nullValue()))
 			.andExpect(jsonPath("$.attempts").doesNotExist())
 			.andExpect(jsonPath("$.nextAttemptAt").doesNotExist())
 			.andExpect(jsonPath("$.version").doesNotExist());
@@ -228,6 +231,27 @@ class ActivationRequestApiIntegrationTests {
 			.andExpect(jsonPath("$.content[0].externalId").value("EXT-PENDING"))
 			.andExpect(jsonPath("$.content[0].status").value("PENDING"))
 			.andExpect(jsonPath("$.content[0].customerId").value(customer));
+	}
+
+	@Test
+	void exposesFailureReasonOfFailedRequest() throws Exception {
+		String customer = uniqueCustomer("CUST-F");
+		// a falha é gravada direto pelo repositório, sem passar pelo provedor
+		ActivationRequest failed = ActivationRequest.create("EXT-FAILED-" + customer, customer, "INTERNET-500",
+				Instant.now());
+		failed.startProcessing(Instant.now());
+		failed.fail(FailureReason.MAX_ATTEMPTS_EXCEEDED, Instant.now());
+		repository.save(failed);
+
+		mockMvc.perform(get("/api/v1/requests/{id}", failed.getId()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.status").value("FAILED"))
+			.andExpect(jsonPath("$.failureReason").value("MAX_ATTEMPTS_EXCEEDED"));
+		mockMvc.perform(get("/api/v1/requests").param("status", "FAILED").param("customerId", customer))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.content.length()").value(1))
+			.andExpect(jsonPath("$.content[0].id").value(failed.getId().toString()))
+			.andExpect(jsonPath("$.content[0].failureReason").value("MAX_ATTEMPTS_EXCEEDED"));
 	}
 
 	@Test

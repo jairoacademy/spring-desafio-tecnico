@@ -1,0 +1,41 @@
+meta {
+  name: Consultar criada
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/requests/{{requestId}}
+  body: none
+  auth: none
+}
+
+script:pre-request {
+  // dá tempo ao worker (intervalo de 1 s) de enviar ao provedor
+  await bru.sleep(2000);
+}
+
+tests {
+  test("200 com a solicitação", function() {
+    expect(res.status).to.equal(200);
+    expect(res.body.id).to.equal(bru.getVar("requestId"));
+  });
+
+  test("concluída pelo worker em segundo plano", function() {
+    expect(res.body.status).to.equal("COMPLETED");
+    expect(res.body.failureReason).to.equal(null);
+    expect(res.body.updatedAt > res.body.createdAt).to.equal(true);
+  });
+}
+
+docs {
+  Usa `requestId` gravado por `01 Criar / Criar solicitação válida` (rode aquele antes).
+  O script pré-requisição espera 2 s. Nesse tempo o worker reserva a solicitação
+  (`PROCESSING`), chama o provedor (WireMock responde `200`) e grava `COMPLETED`.
+  `createdAt` continua o da criação; `updatedAt` é o instante da conclusão.
+
+  **Experimente:** envie esta request logo depois da criação, desligando o script: às vezes
+  ainda aparece `PENDING`. Com `docker compose stop wiremock`, a solicitação volta para
+  `PENDING` a cada falha (backoff 1–2 s, 2–4 s, ...) e, depois de 5 tentativas, vai para
+  `FAILED` com `failureReason` `MAX_ATTEMPTS_EXCEEDED`.
+}

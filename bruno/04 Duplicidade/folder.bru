@@ -1,0 +1,13 @@
+meta {
+  name: 04 Duplicidade
+  seq: 5
+}
+
+docs {
+  `externalId` é único em todo o serviço (constraint `uq_activation_request_external_id`,
+  ADR 0001). Rode `01 Criar / Criar solicitação válida` antes: os requests desta pasta
+  reusam o `externalId`, o `customerId` e o `requestId` gravados por ele.
+
+  A corrida entre requisições paralelas não dá para reproduzir aqui, porque o Bruno envia
+  um request por vez. Ela é coberta por `ActivationRequestConcurrencyIntegrationTests`.
+}

@@ -1,0 +1,48 @@
+meta {
+  name: Stub recusa 400
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{providerUrl}}/__admin/mappings
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "priority": 1,
+    "request": {
+      "method": "POST",
+      "url": "/provider/v1/activate",
+      "bodyPatterns": [ { "matchesJsonPath": "$[?(@.externalId == '{{rejectedExternalId}}')]" } ]
+    },
+    "response": { "status": 400 }
+  }
+}
+
+script:pre-request {
+  bru.setVar("rejectedExternalId", "EXT-REJ-" + Date.now());
+}
+
+script:post-response {
+  if (res.status === 201) {
+    bru.setVar("rejectStubId", res.body.id);
+  }
+}
+
+tests {
+  test("201 stub criado no WireMock", function() {
+    expect(res.status).to.equal(201);
+  });
+}
+
+docs {
+  Chama a API de administração do WireMock (não a nossa API). O stub só casa com o
+  `externalId` gerado aqui, então não afeta as outras pastas.
+}

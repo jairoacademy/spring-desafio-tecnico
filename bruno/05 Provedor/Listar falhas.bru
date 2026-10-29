@@ -1,0 +1,26 @@
+meta {
+  name: Listar falhas
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/api/v1/requests?status=FAILED&customerId={{customerId}}
+  body: none
+  auth: none
+}
+
+tests {
+  test("200 com a recusada e o motivo", function() {
+    expect(res.status).to.equal(200);
+    const item = res.body.content.find(r => r.id === bru.getVar("rejectedRequestId"));
+    expect(item).to.not.be.undefined;
+    expect(item.failureReason).to.equal("PROVIDER_REJECTED");
+    res.body.content.forEach(r => expect(r.status).to.equal("FAILED"));
+  });
+}
+
+docs {
+  `status=FAILED` é o jeito de achar falhas definitivas; `failureReason` diz se o provedor
+  recusou (`PROVIDER_REJECTED`) ou se acabaram as tentativas (`MAX_ATTEMPTS_EXCEEDED`).
+}

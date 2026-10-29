@@ -1,0 +1,55 @@
+meta {
+  name: productCode divergente
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/v1/requests
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "externalId": "{{externalId}}",
+    "customerId": "{{customerId}}",
+    "productCode": "INTERNET-900"
+  }
+}
+
+tests {
+  test("409 duplicate-external-id com traceId", function() {
+    expect(res.status).to.equal(409);
+    expect(res.getHeader("content-type")).to.contain("application/problem+json");
+    expect(res.body.type).to.equal("https://problems.ativacao.example/duplicate-external-id");
+    expect(res.body.title).to.equal("Solicitação duplicada");
+    expect(res.body.detail).to.contain(bru.getVar("externalId"));
+    expect(res.body.traceId).to.match(/^[0-9a-f]{32}$/);
+  });
+
+  test("conflictingFields só com productCode", function() {
+    expect(res.body.conflictingFields).to.deep.equal(["productCode"]);
+  });
+
+  test("não expõe dados do registro existente", function() {
+    expect(res.body).to.not.have.property("id");
+    expect(res.body).to.not.have.property("customerId");
+    expect(res.body).to.not.have.property("productCode");
+  });
+}
+
+docs {
+  Mesmo `externalId` com outro pedido: conflito real, que exige ação humana. `409` em
+  ProblemDetail, com a lista `conflictingFields`.
+
+  A resposta não traz o `id` nem os valores do registro existente. Quando a etapa de
+  segurança chegar, outro cliente não vai conseguir ler a solicitação alheia por aqui.
+
+  **Experimente:** rode `02 Consultar / Consultar criada` depois. `productCode` e
+  `updatedAt` continuam os da criação.
+}

@@ -1,0 +1,28 @@
+meta {
+  name: Por cliente
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/requests?customerId={{customerId}}
+  body: none
+  auth: none
+}
+
+tests {
+  test("200 só com o cliente pedido", function() {
+    expect(res.status).to.equal(200);
+    res.body.content.forEach(r => expect(r.customerId).to.equal(decodeURIComponent(req.getUrl().match(/[?&]customerId=([^&]*)/)[1])));
+  });
+
+  test("mais recente primeiro", function() {
+    const dates = res.body.content.map(r => r.createdAt);
+    expect(dates).to.deep.equal([...dates].sort().reverse());
+  });
+}
+
+docs {
+  Filtra por `customerId` do environment. Ordem fixa: `createdAt` decrescente.
+  Essa consulta usa o índice `(customer_id, created_at DESC)`: já vem na ordem, sem sort.
+}

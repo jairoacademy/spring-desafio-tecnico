@@ -1,0 +1,22 @@
+meta {
+  name: Remover stub
+  type: http
+  seq: 6
+}
+
+delete {
+  url: {{providerUrl}}/__admin/mappings/{{rejectStubId}}
+  body: none
+  auth: none
+}
+
+tests {
+  test("200 stub removido", function() {
+    expect(res.status).to.equal(200);
+  });
+}
+
+docs {
+  Remove o stub de recusa criado no primeiro request. O WireMock volta a responder `200`
+  a toda ativação (mapping de `wiremock/mappings/`).
+}

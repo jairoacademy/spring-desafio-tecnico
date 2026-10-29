@@ -1,0 +1,71 @@
+meta {
+  name: Criar solicitação válida
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/v1/requests
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "externalId": "{{externalId}}",
+    "customerId": "{{customerId}}",
+    "productCode": "INTERNET-500"
+  }
+}
+
+script:pre-request {
+  // externalId novo a cada envio: ele é único (repetir vira 200 ou 409, ver 04 Duplicidade)
+  bru.setVar("externalId", "EXT-" + Date.now());
+}
+
+script:post-response {
+  if (res.status === 201) {
+    bru.setVar("requestId", res.body.id);
+    bru.setVar("location", res.getHeader("location"));
+  }
+}
+
+tests {
+  test("201 com Location apontando para o id", function() {
+    expect(res.status).to.equal(201);
+    expect(res.getHeader("location")).to.match(new RegExp("/api/v1/requests/" + res.body.id + "$"));
+  });
+
+  test("corpo com status PENDING e sem campos internos", function() {
+    expect(res.body.status).to.equal("PENDING");
+    expect(res.body).to.have.property("failureReason", null);
+    expect(res.body.id).to.match(/^[0-9a-f-]{36}$/);
+    expect(res.body).to.not.have.property("attempts");
+    expect(res.body).to.not.have.property("nextAttemptAt");
+    expect(res.body).to.not.have.property("version");
+  });
+
+  test("datas ISO-8601 em UTC e iguais na criação", function() {
+    expect(res.body.createdAt).to.match(/Z$/);
+    expect(res.body.createdAt).to.equal(res.body.updatedAt);
+  });
+}
+
+docs {
+  **O que observar**
+  - Status `201` e header `Location` (aba Headers).
+  - `createdAt` == `updatedAt`, em UTC (sufixo `Z`), com microssegundos.
+  - `attempts`, `nextAttemptAt` e `version` existem na entidade, mas não na resposta:
+    DTO separado da entidade.
+  - `failureReason` aparece sempre, `null` fora de `FAILED`.
+  - A resposta sai sem esperar o provedor: o envio é assíncrono (worker a cada 1 s).
+
+  O script pré-requisição gera um `externalId` novo; o pós-resposta grava `requestId` e
+  `location` para a pasta `02 Consultar`.
+
+  **Experimente:** rode várias vezes e depois `03 Listar / Por cliente`.
+}

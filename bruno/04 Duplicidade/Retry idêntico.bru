@@ -1,0 +1,48 @@
+meta {
+  name: Retry idêntico
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/v1/requests
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "externalId": "{{externalId}}",
+    "customerId": "{{customerId}}",
+    "productCode": "INTERNET-500"
+  }
+}
+
+tests {
+  test("200 com o registro existente", function() {
+    expect(res.status).to.equal(200);
+    expect(res.body.id).to.equal(bru.getVar("requestId"));
+    expect(res.body.externalId).to.equal(bru.getVar("externalId"));
+  });
+
+  test("sem header Location", function() {
+    expect(res.getHeader("location")).to.be.undefined;
+  });
+}
+
+docs {
+  Mesmo corpo da criação: o sistema de origem não sabe se a primeira chamada chegou
+  (timeout, queda de conexão) e repete. A resposta é `200` com o registro existente, no
+  status atual, sem `Location`. Nenhum registro novo, nenhuma alteração.
+
+  **Experimente:** compare `createdAt` e `updatedAt` com os de `02 Consultar / Consultar criada`.
+  São os mesmos. Rode várias vezes e depois `03 Listar / Por cliente`: só um registro com
+  esse `externalId`.
+
+  No console do IntelliJ não aparece `duplicate key value`: a busca prévia acha o registro
+  antes de tentar o `INSERT`.
+}

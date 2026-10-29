@@ -1,0 +1,23 @@
+meta {
+  name: Liveness
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/actuator/health/liveness
+  body: none
+  auth: none
+}
+
+tests {
+  test("200 UP", function() {
+    expect(res.status).to.equal(200);
+    expect(res.body.status).to.equal("UP");
+  });
+}
+
+docs {
+  A aplicação está viva. Não depende do banco: se o Postgres cair, a liveness continua UP
+  (para o orquestrador não reiniciar a aplicação à toa). Compare com a readiness.
+}

@@ -1,0 +1,43 @@
+meta {
+  name: externalId com caixa diferente
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/v1/requests
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "externalId": "{{externalIdLower}}",
+    "customerId": "{{customerId}}",
+    "productCode": "INTERNET-500"
+  }
+}
+
+script:pre-request {
+  bru.setVar("externalIdLower", bru.getVar("externalId").toLowerCase());
+}
+
+tests {
+  test("201: outra solicitação", function() {
+    expect(res.status).to.equal(201);
+    expect(res.body.externalId).to.equal(bru.getVar("externalIdLower"));
+    expect(res.body.id).to.not.equal(bru.getVar("requestId"));
+  });
+}
+
+docs {
+  A comparação é exata: `EXT-123` e `ext-123` são solicitações distintas. Não há
+  normalização de caixa.
+
+  Rodar de novo devolve `200`: o `externalId` em minúsculas passou a existir e vira retry
+  idêntico. Para voltar ao `201`, rode `01 Criar / Criar solicitação válida` antes.
+}

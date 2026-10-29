@@ -1,0 +1,50 @@
+meta {
+  name: Chamadas recebidas pelo provedor
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{providerUrl}}/__admin/requests/find
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "method": "POST",
+    "url": "/provider/v1/activate",
+    "headers": { "Idempotency-Key": { "equalTo": "{{rejectedRequestId}}" } }
+  }
+}
+
+script:pre-request {
+  // mais duas rodadas do worker: nenhuma deve reenviar a solicitação recusada
+  await bru.sleep(2000);
+}
+
+tests {
+  test("exatamente uma chamada, sem nova tentativa", function() {
+    expect(res.status).to.equal(200);
+    expect(res.body.requests).to.have.length(1);
+  });
+
+  test("Idempotency-Key é o id e o corpo traz os três campos", function() {
+    const call = res.body.requests[0];
+    expect(call.headers["Idempotency-Key"]).to.equal(bru.getVar("rejectedRequestId"));
+    const body = JSON.parse(call.body);
+    expect(body.externalId).to.equal(bru.getVar("rejectedExternalId"));
+    expect(body).to.have.property("customerId");
+    expect(body.productCode).to.equal("INTERNET-500");
+  });
+}
+
+docs {
+  Consulta o log de requisições do WireMock pela `Idempotency-Key`, que é o `id` da
+  solicitação e se repete em toda nova tentativa. Mostra o contrato suposto do provedor
+  (README, "Contrato suposto do provedor").
+}

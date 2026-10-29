@@ -1,0 +1,42 @@
+meta {
+  name: productCode fora do formato
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/v1/requests
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "externalId": "EXT-1",
+    "customerId": "CUST-1",
+    "productCode": "internet 500"
+  }
+}
+
+tests {
+  test("400 em ProblemDetail com traceId", function() {
+    expect(res.status).to.equal(400);
+    expect(res.getHeader("content-type")).to.contain("application/problem+json");
+    expect(res.body.type).to.equal("https://problems.ativacao.example/validation-error");
+    expect(res.body.title).to.equal("Dados inválidos");
+    expect(res.body.traceId).to.match(/^[0-9a-f]{32}$/);
+  });
+
+  test("errors cita productCode", function() {
+    const fields = res.body.errors.map(e => e.field);
+    expect(fields).to.include("productCode");
+  });
+}
+
+docs {
+  `productCode` aceita só maiúsculas, dígitos, `-` e `_`. Minúsculas e espaço falham no `@Pattern`.
+}

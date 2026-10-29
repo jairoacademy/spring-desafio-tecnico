@@ -1,0 +1,38 @@
+meta {
+  name: JSON malformado
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{baseUrl}}/api/v1/requests
+  body: text
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:text {
+  {"externalId":
+}
+
+tests {
+  test("400 malformed-body", function() {
+    expect(res.status).to.equal(400);
+    expect(res.body.type).to.equal("https://problems.ativacao.example/malformed-body");
+    expect(res.body.traceId).to.match(/^[0-9a-f]{32}$/);
+  });
+
+  test("detail não vaza mensagem do parser", function() {
+    expect(res.body.detail).to.not.match(/jackson|Exception|line:|column:/i);
+  });
+}
+
+docs {
+  Corpo enviado como texto para ir quebrado de propósito. O `detail` é fixo: a mensagem
+  original do Jackson citaria classes e posições internas.
+
+  **Experimente:** troque por `{"externalId": 123, ...}` (tipo errado) e veja o mesmo erro.
+}

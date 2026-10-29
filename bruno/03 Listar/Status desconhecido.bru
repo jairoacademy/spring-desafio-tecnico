@@ -1,0 +1,22 @@
+meta {
+  name: Status desconhecido
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/api/v1/requests?status=DONE
+  body: none
+  auth: none
+}
+
+tests {
+  test("400 invalid-parameter", function() {
+    expect(res.status).to.equal(400);
+    expect(res.body.type).to.equal("https://problems.ativacao.example/invalid-parameter");
+  });
+}
+
+docs {
+  `DONE` não é um valor do enum `ActivationStatus`: falha na conversão do parâmetro.
+}

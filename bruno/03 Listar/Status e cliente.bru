@@ -1,0 +1,28 @@
+meta {
+  name: Status e cliente
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/v1/requests?status=PENDING&customerId={{customerId}}
+  body: none
+  auth: none
+}
+
+tests {
+  test("200 só PENDING do cliente", function() {
+    expect(res.status).to.equal(200);
+    res.body.content.forEach(r => {
+      expect(r.status).to.equal("PENDING");
+      expect(r.customerId).to.equal(decodeURIComponent(req.getUrl().match(/[?&]customerId=([^&]*)/)[1]));
+    });
+  });
+}
+
+docs {
+  Filtros combinados (specifications do Spring Data). Com o worker ligado, as solicitações
+  saem de `PENDING` em cerca de 1 s, então a lista costuma vir vazia.
+  **Experimente:** `status=COMPLETED` traz as concluídas e `status=FAILED`, as recusadas
+  em `05 Provedor`, com `failureReason`.
+}
