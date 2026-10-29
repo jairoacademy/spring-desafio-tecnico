@@ -8,7 +8,7 @@
 
 ## 2. Persistência
 
-- [ ] 2.1 Criar migração `V1__create_activation_request.sql` (tabela, `CHECK` de status, índices `(customer_id, created_at DESC)` e `(status, created_at DESC)`) e configurar `spring.jpa.hibernate.ddl-auto=validate`; verificar com o teste de contexto existente passando
+- [x] 2.1 Criar migração `V1__create_activation_request.sql` (tabela, `CHECK` de status, índices `(customer_id, created_at DESC)` e `(status, created_at DESC)`) e configurar `spring.jpa.hibernate.ddl-auto=validate`; verificar com o teste de contexto existente passando
 - [ ] 2.2 Criar `ActivationRequestRepository` (`JpaRepository` + `JpaSpecificationExecutor`) e as specifications de filtro por `status` e `customerId`; teste `@DataJpaTest` com Testcontainers cobrindo gravação/leitura e o lock otimista (segunda gravação de cópia desatualizada lança `ObjectOptimisticLockingFailureException`)
 
 ## 3. Origem do traceId
