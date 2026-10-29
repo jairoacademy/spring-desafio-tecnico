@@ -51,10 +51,12 @@ No IntelliJ, informe `local` em **Active profiles** na Run Configuration.
 ### Testes
 
 ```bash
-./mvnw test
+./mvnw verify
 ```
 
-Os testes sobem o próprio PostgreSQL via Testcontainers e não dependem do `compose.yaml` (Docker precisa estar em execução).
+Build e testes com um único comando. Os testes sobem o próprio PostgreSQL via Testcontainers e não dependem do `compose.yaml` (Docker precisa estar em execução).
+
+O pipeline de CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) roda a cada push e pull request: o job `verify` executa `./mvnw -B verify` e o job `compose-smoke` sobe o ambiente com `docker compose up --build --wait` e confere readiness, usuário não-root e mock do provedor.
 
 ### Configuração do banco
 

@@ -32,7 +32,7 @@
 
 ## 7. Fechamento
 
-- [ ] 7.1 Revisar README e ADR 0000 contra o estado final da change e rodar `./mvnw verify` com sucesso
+- [x] 7.1 Revisar README e ADR 0000 contra o estado final da change e rodar `./mvnw verify` com sucesso
 
 ## Workflow follow-up
 
