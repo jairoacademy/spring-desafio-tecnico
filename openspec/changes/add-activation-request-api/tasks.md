@@ -17,7 +17,7 @@
 
 ## 4. API de criação e consulta
 
-- [ ] 4.1 Criar bean `Clock` UTC e `ActivationRequestService` (`create`, `findById` lançando `ActivationRequestNotFoundException`); coberto pelos testes de integração da 4.3
+- [x] 4.1 Criar bean `Clock` UTC e `ActivationRequestService` (`create`, `findById` lançando `ActivationRequestNotFoundException`); coberto pelos testes de integração da 4.3
 - [ ] 4.2 Criar `ApiExceptionHandler` (`ResponseEntityExceptionHandler`, `traceId` e `instance` em todo ProblemDetail, handlers da tabela do design, `detail` fixo para corpo ilegível) e `server.error.include-stacktrace=never`/`include-message=never`; coberto pelos testes da 4.3 e 4.4
 - [ ] 4.3 Criar DTOs `record` com Bean Validation e `ActivationRequestController` com `POST` (201 + `Location`) e `GET /{id}`; teste `ActivationRequestApiIntegrationTests` (`@SpringBootTest`, `@AutoConfigureMockMvc`, `@AutoConfigureTracing`, Testcontainers) cobrindo: criação válida, datas ISO-8601 em UTC iguais, GET do `Location` com mesmos dados, cada caso de validação da spec (ausente, tamanho, formato, `{}`), JSON malformado sem detalhe do parser, consulta existente, inexistente (404), id não UUID (400), `DELETE` (405), `Content-Type` `application/problem+json` e `traceId` `^[0-9a-f]{32}$` distinto por requisição
 - [ ] 4.4 Teste `UnexpectedErrorIntegrationTests` com `@MockitoBean` no serviço lançando `RuntimeException("segredo interno")`: verificar `500` em ProblemDetail sem a mensagem, sem nome de exceção e sem stack trace, e o mesmo `traceId` presente no log capturado (`OutputCaptureExtension`)
