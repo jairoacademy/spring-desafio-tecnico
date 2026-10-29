@@ -1,0 +1,14 @@
+meta {
+  name: 05 Provedor
+  seq: 6
+}
+
+docs {
+  Integração assíncrona com o provedor externo (ADRs 0002, 0003 e 0005). Rode em ordem.
+
+  O WireMock do `compose.yaml` responde `200` a toda ativação. Aqui um stub temporário,
+  de prioridade maior e só para um `externalId`, faz o provedor recusar (`400`); as outras
+  solicitações continuam recebendo `200`. O último request remove o stub.
+
+  Comportamento por retorno do provedor: tabela "Integração com o provedor" do README.
+}

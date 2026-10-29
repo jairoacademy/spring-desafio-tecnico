@@ -1,0 +1,29 @@
+meta {
+  name: Consultar recusada
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/v1/requests/{{rejectedRequestId}}
+  body: none
+  auth: none
+}
+
+script:pre-request {
+  // dá tempo ao worker (intervalo de 1 s) de enviar ao provedor
+  await bru.sleep(2000);
+}
+
+tests {
+  test("FAILED com PROVIDER_REJECTED", function() {
+    expect(res.status).to.equal(200);
+    expect(res.body.status).to.equal("FAILED");
+    expect(res.body.failureReason).to.equal("PROVIDER_REJECTED");
+  });
+}
+
+docs {
+  `400` é falha definitiva: repetir o mesmo pedido não muda a resposta, então não há nova
+  tentativa. No console da aplicação aparece um `WARN` com o status recebido.
+}

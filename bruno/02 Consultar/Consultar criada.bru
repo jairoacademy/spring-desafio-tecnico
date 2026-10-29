@@ -10,18 +10,32 @@ get {
   auth: none
 }
 
+script:pre-request {
+  // dá tempo ao worker (intervalo de 1 s) de enviar ao provedor
+  await bru.sleep(2000);
+}
+
 tests {
   test("200 com a solicitação", function() {
     expect(res.status).to.equal(200);
     expect(res.body.id).to.equal(bru.getVar("requestId"));
-    expect(res.body.status).to.equal("PENDING");
+  });
+
+  test("concluída pelo worker em segundo plano", function() {
+    expect(res.body.status).to.equal("COMPLETED");
+    expect(res.body.failureReason).to.equal(null);
+    expect(res.body.updatedAt > res.body.createdAt).to.equal(true);
   });
 }
 
 docs {
   Usa `requestId` gravado por `01 Criar / Criar solicitação válida` (rode aquele antes).
-  Compare as datas com as da criação: são idênticas, porque os instantes são truncados em
-  microssegundos, a precisão do `timestamptz` do Postgres.
+  O script pré-requisição espera 2 s. Nesse tempo o worker reserva a solicitação
+  (`PROCESSING`), chama o provedor (WireMock responde `200`) e grava `COMPLETED`.
+  `createdAt` continua o da criação; `updatedAt` é o instante da conclusão.
 
-  Status fica `PENDING` por enquanto: o processamento chega na Etapa 4.
+  **Experimente:** envie esta request logo depois da criação, desligando o script: às vezes
+  ainda aparece `PENDING`. Com `docker compose stop wiremock`, a solicitação volta para
+  `PENDING` a cada falha (backoff 1–2 s, 2–4 s, ...) e, depois de 5 tentativas, vai para
+  `FAILED` com `failureReason` `MAX_ATTEMPTS_EXCEEDED`.
 }

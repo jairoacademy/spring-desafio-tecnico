@@ -42,6 +42,7 @@ tests {
 
   test("corpo com status PENDING e sem campos internos", function() {
     expect(res.body.status).to.equal("PENDING");
+    expect(res.body).to.have.property("failureReason", null);
     expect(res.body.id).to.match(/^[0-9a-f-]{36}$/);
     expect(res.body).to.not.have.property("attempts");
     expect(res.body).to.not.have.property("nextAttemptAt");
@@ -60,6 +61,8 @@ docs {
   - `createdAt` == `updatedAt`, em UTC (sufixo `Z`), com microssegundos.
   - `attempts`, `nextAttemptAt` e `version` existem na entidade, mas não na resposta:
     DTO separado da entidade.
+  - `failureReason` aparece sempre, `null` fora de `FAILED`.
+  - A resposta sai sem esperar o provedor: o envio é assíncrono (worker a cada 1 s).
 
   O script pré-requisição gera um `externalId` novo; o pós-resposta grava `requestId` e
   `location` para a pasta `02 Consultar`.

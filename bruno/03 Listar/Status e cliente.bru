@@ -21,6 +21,8 @@ tests {
 }
 
 docs {
-  Filtros combinados (specifications do Spring Data). **Experimente:** `status=COMPLETED`
-  devolve vazio por enquanto; a partir da Etapa 4 haverá solicitações concluídas.
+  Filtros combinados (specifications do Spring Data). Com o worker ligado, as solicitações
+  saem de `PENDING` em cerca de 1 s, então a lista costuma vir vazia.
+  **Experimente:** `status=COMPLETED` traz as concluídas e `status=FAILED`, as recusadas
+  em `05 Provedor`, com `failureReason`.
 }
