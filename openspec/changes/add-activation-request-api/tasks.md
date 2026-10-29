@@ -13,7 +13,7 @@
 
 ## 3. Origem do traceId
 
-- [ ] 3.1 Confirmar na documentação oficial do Boot 4.1 o artefato de Micrometer Tracing + bridge OpenTelemetry sem exportador (design, decisão 9), adicionar ao `pom.xml` e, se necessário, desligar exportação por propriedade; verificar com `./mvnw verify` sem erro de exportação no log dos testes
+- [x] 3.1 Confirmar na documentação oficial do Boot 4.1 o artefato de Micrometer Tracing + bridge OpenTelemetry sem exportador (design, decisão 9), adicionar ao `pom.xml` e, se necessário, desligar exportação por propriedade; verificar com `./mvnw verify` sem erro de exportação no log dos testes
 
 ## 4. API de criação e consulta
 

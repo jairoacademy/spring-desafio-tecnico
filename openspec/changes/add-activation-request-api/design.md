@@ -109,7 +109,8 @@ Por que este e não um filtro próprio que grava um id no MDC:
 - Correlação de logs pronta, sem código.
 Custo: uma dependência (bridge + SDK OpenTelemetry) e overhead de criar spans por requisição, desprezível aqui.
 Dependência: o módulo do Boot 4 que traz Micrometer Tracing + bridge OpenTelemetry **sem** exportador. Candidatos a confirmar na documentação oficial do Boot 4.1 / start.spring.io antes de adicionar: `spring-boot-starter-opentelemetry` (inclui exportador OTLP; exige desligar exportação) ou `spring-boot-micrometer-tracing-opentelemetry` + `micrometer-tracing-bridge-otel`. Preferir o que não traz exportador; se só houver o starter, desligar a exportação por propriedade até a change 6.
-Testes: `@SpringBootTest` não configura tracing de verdade por padrão; os testes que verificam `traceId` usam `@AutoConfigureTracing` (pacote confirmado no Boot 4 na implementação).
+Confirmado no BOM do Boot 4.1.2: `spring-boot-starter-opentelemetry` traz `opentelemetry-exporter-otlp` e `micrometer-registry-otlp`, por isso não é usado. Adotados `org.springframework.boot:spring-boot-micrometer-tracing-opentelemetry` (auto-configuração do tracing e do SDK OpenTelemetry) + `io.micrometer:micrometer-tracing-bridge-otel` (bridge), ambos com versão gerenciada pelo Boot e sem exportador; nenhuma propriedade de exportação é necessária. A change 6 troca os dois pelo starter quando houver coletor.
+Testes: `@SpringBootTest` não configura tracing de verdade por padrão; os testes que verificam `traceId` usam `@AutoConfigureTracing` (`org.springframework.boot.micrometer.tracing.test.autoconfigure`), do módulo `spring-boot-micrometer-tracing-test` (escopo `test`).
 Se não houver span corrente (só ocorre fora de requisição HTTP), o campo `traceId` é omitido em vez de inventado.
 Alternativa: filtro `OncePerRequestFilter` que gera UUID sem hífens, grava no MDC e devolve em header. Rejeitada pelos motivos acima.
 
