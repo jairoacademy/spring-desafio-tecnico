@@ -1,0 +1,54 @@
+meta {
+  name: Só leitura criando
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/v1/requests
+  body: json
+  auth: oauth2
+}
+
+headers {
+  Content-Type: application/json
+}
+
+auth:oauth2 {
+  grant_type: client_credentials
+  access_token_url: {{tokenUrl}}
+  client_id: sistema-leitura
+  client_secret: dev
+  scope: activation:read
+  credentials_placement: body
+  credentials_id: sistema-leitura
+  token_placement: header
+  token_header_prefix: Bearer
+  auto_fetch_token: true
+  auto_refresh_token: false
+}
+
+body:json {
+  {
+    "externalId": "{{securityExternalId}}",
+    "customerId": "{{customerId}}",
+    "productCode": "INTERNET-500"
+  }
+}
+
+script:pre-request {
+  bru.setVar("securityExternalId", "EXT-SEC-" + Date.now());
+}
+
+tests {
+  test("403 em ProblemDetail", function() {
+    expect(res.status).to.equal(403);
+    expect(res.body.type).to.equal("https://problems.ativacao.example/forbidden");
+    expect(res.body.traceId).to.match(/^[0-9a-f]{32}$/);
+  });
+}
+
+docs {
+  `sistema-leitura` tem token válido, mas só `activation:read`. A criação exige
+  `activation:write`: `403`, e nada é gravado. Um escopo não implica o outro.
+}

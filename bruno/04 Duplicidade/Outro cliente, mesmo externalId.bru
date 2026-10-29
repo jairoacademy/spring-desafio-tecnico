@@ -7,7 +7,7 @@ meta {
 post {
   url: {{baseUrl}}/api/v1/requests
   body: json
-  auth: none
+  auth: inherit
 }
 
 headers {
@@ -30,6 +30,9 @@ tests {
 }
 
 docs {
-  A unicidade é global, não por cliente, como diz o enunciado: outro `customerId` com o
+  A unicidade é global, não por `customerId`, como diz o enunciado: outro `customerId` com o
   mesmo `externalId` também é duplicidade. A alternativa por origem está no ADR 0001.
+
+  Aqui o sistema chamador é o mesmo (`sistema-a`), então o `409` traz `conflictingFields`.
+  Se o `externalId` fosse de outro sistema chamador, o `409` viria sem detalhes (ADR 0004).
 }

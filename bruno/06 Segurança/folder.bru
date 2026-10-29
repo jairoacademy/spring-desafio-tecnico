@@ -1,0 +1,17 @@
+meta {
+  name: 06 Segurança
+  seq: 7
+}
+
+docs {
+  Autenticação, escopos e isolamento entre clientes (ADR 0004). Rode em ordem.
+
+  Cada request define a própria auth em vez de herdar a da collection: sem token, ou com o
+  token de outro cliente do emissor de desenvolvimento (`oauth2/config.json`).
+
+  | Cliente | Escopos |
+  |---|---|
+  | `sistema-a` | `activation:read activation:write` (auth da collection) |
+  | `sistema-b` | `activation:read activation:write` |
+  | `sistema-leitura` | `activation:read` |
+}

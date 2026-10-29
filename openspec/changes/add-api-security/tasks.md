@@ -24,7 +24,7 @@
 ## 5. Ambiente local, Bruno e CI
 
 - [x] 5.1 Adicionar ao `compose.yaml` o serviço `oauth2` (`ghcr.io/navikt/mock-oauth2-server:6.0.4`, porta `8091`, `JSON_CONFIG` lido de `oauth2/config.json` com os clientes da decisão 10, health check com `wget`) e as variáveis `JWT_*` no `app`; passo novo no job `compose-smoke` do CI obtendo token de `sistema-leitura` e chamando `GET /api/v1/requests` com `200`; atualizar o README ("Tudo com Docker Compose" e "Aplicação local": como obter token com `curl`, aviso de que o emissor aceita qualquer segredo e só serve para desenvolvimento); verificar com `docker compose up --build --wait` e os mesmos comandos do passo novo do CI
-- [ ] 5.2 Coleção Bruno: auth OAuth 2.0 client credentials na coleção (`sistema-a`, token em `http://localhost:8091/default/token`), requests existentes herdando a auth, e pasta `06 Segurança` com sem token (`401`), só leitura criando (`403`) e `sistema-b` consultando solicitação de `sistema-a` (`404`); atualizar a docs da coleção com o `oauth2` no passo "Antes de usar"; verificar rodando a coleção contra a aplicação local com o perfil `local`
+- [x] 5.2 Coleção Bruno: auth OAuth 2.0 client credentials na coleção (`sistema-a`, token em `http://localhost:8091/default/token`), requests existentes herdando a auth, e pasta `06 Segurança` com sem token (`401`), só leitura criando (`403`) e `sistema-b` consultando solicitação de `sistema-a` (`404`); atualizar a docs da coleção com o `oauth2` no passo "Antes de usar"; verificar rodando a coleção contra a aplicação local com o perfil `local`
 
 ## 6. Decisões e verificação final
 
