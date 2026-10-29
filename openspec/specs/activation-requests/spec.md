@@ -7,7 +7,7 @@ Define como sistemas de origem registram, consultam e listam solicitações de a
 ## Requirements
 
 ### Requirement: Criação de solicitação
-O serviço SHALL expor `POST /api/v1/requests`, que recebe `externalId`, `customerId` e `productCode` em JSON e cria uma solicitação com status `PENDING`. A resposta MUST ser `201 Created`, com header `Location` apontando para `/api/v1/requests/{id}` e corpo contendo `id`, `externalId`, `customerId`, `productCode`, `status`, `createdAt` e `updatedAt`. (Itens 2 e 4)
+O serviço SHALL expor `POST /api/v1/requests`, que recebe `externalId`, `customerId` e `productCode` em JSON e cria uma solicitação com status `PENDING` quando o `externalId` ainda não está registrado. Nesse caso, a resposta MUST ser `201 Created`, com header `Location` apontando para `/api/v1/requests/{id}` e corpo contendo `id`, `externalId`, `customerId`, `productCode`, `status`, `createdAt` e `updatedAt`. Uma criação com `externalId` já registrado MUST seguir as regras da capability `duplicate-prevention`. (Itens 2, 3 e 4)
 
 #### Scenario: Criação com dados válidos
 - **WHEN** um cliente envia `POST /api/v1/requests` com `{"externalId":"EXT-12345","customerId":"CUST-10001","productCode":"INTERNET-500"}`
@@ -16,6 +16,10 @@ O serviço SHALL expor `POST /api/v1/requests`, que recebe `externalId`, `custom
 #### Scenario: Solicitação criada fica persistida
 - **WHEN** um cliente cria uma solicitação e em seguida chama `GET` na URL do header `Location`
 - **THEN** a resposta é `200` com os mesmos `id`, `externalId`, `customerId`, `productCode`, `status`, `createdAt` e `updatedAt` da criação
+
+#### Scenario: externalId repetido não gera 201
+- **WHEN** um cliente envia duas vezes `POST /api/v1/requests` com o mesmo `externalId`
+- **THEN** só a primeira resposta é `201`; a segunda é `200` ou `409`, conforme `duplicate-prevention`
 
 ### Requirement: Datas em UTC no formato ISO-8601
 Os campos `createdAt` e `updatedAt` SHALL ser serializados como texto ISO-8601 em UTC, com sufixo `Z`. Na criação, `createdAt` e `updatedAt` MUST ser iguais. (Itens 2 e 4)
