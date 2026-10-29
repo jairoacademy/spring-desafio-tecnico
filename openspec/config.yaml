@@ -1,0 +1,28 @@
+schema: spec-driven
+
+context: |
+  Language: pt-BR
+  All artifacts must be written in pt-BR.
+  Keep OpenSpec structural headings and SHALL/MUST keywords in English.
+
+  Serviço de ativação de produtos (desafio técnico Java Pleno/Sênior).
+  Enunciado completo: docs/desafio-tecnico-java.md — é a fonte de verdade.
+  Stack: Java 21, Spring Boot 4.1.2 (Spring Framework 7, Spring Security 7, Hibernate 7,
+  Jakarta EE 11, Jackson 3), Maven (mvnw), Spring MVC, Spring Data JPA,
+  PostgreSQL, Flyway, Spring Security Resource Server (JWT), RestClient,
+  JUnit, Mockito, AssertJ, MockMvc, Testcontainers 2, WireMock, Awaitility, ArchUnit.
+  ATENÇÃO: é Spring Boot 4, não 3. Siga a seção 1.4 de docs/plano-sdd-openspec.md
+  (starters modulares, @MockitoBean, Jackson 3 em tools.jackson, Testcontainers 2).
+  Princípios: solução simples e bem estruturada; nada de camadas ou padrões sem necessidade.
+  Pacotes por feature: api / domain / application / infrastructure.
+  DTOs como records, separados da entidade JPA. Datas Instant em UTC (ISO-8601).
+  Erros sempre em ProblemDetail (RFC 9457) com traceId.
+  Toda decisão relevante vira ADR em docs/adr/ (formato curto: contexto, decisão, consequências).
+
+rules:
+  specs:
+    - Todo requisito tem cenários WHEN/THEN verificáveis por teste automatizado.
+    - 'Cite o item do enunciado (ex.: "Item 3") em cada requisito.'
+  tasks:
+    - Tasks pequenas (até ~30 min), cada uma com o teste correspondente.
+    - "Última task de toda change: atualizar README/ADR e rodar ./mvnw verify."
