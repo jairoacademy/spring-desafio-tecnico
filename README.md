@@ -83,6 +83,145 @@ curl localhost:8080/actuator/health/readiness
 
 Os demais endpoints do Actuator (`env`, `beans`, `configprops` etc.) não são expostos via HTTP.
 
+## API
+
+| Método e caminho | Descrição | Sucesso |
+|---|---|---|
+| `POST /api/v1/requests` | Cria uma solicitação de ativação com status `PENDING` | `201` + header `Location` |
+| `GET /api/v1/requests/{id}` | Consulta uma solicitação e seu status atual | `200` (`404` se não existir) |
+| `GET /api/v1/requests` | Lista solicitações, da mais recente para a mais antiga | `200` |
+
+### Criar
+
+```bash
+curl -i -X POST localhost:8080/api/v1/requests \
+  -H 'Content-Type: application/json' \
+  -d '{"externalId":"EXT-12345","customerId":"CUST-10001","productCode":"INTERNET-500"}'
+```
+
+```http
+HTTP/1.1 201
+Location: http://localhost:8080/api/v1/requests/0b5c8f1e-6a51-4a3e-9d4c-2f8e7a1b3c9d
+Content-Type: application/json
+
+{
+  "id": "0b5c8f1e-6a51-4a3e-9d4c-2f8e7a1b3c9d",
+  "externalId": "EXT-12345",
+  "customerId": "CUST-10001",
+  "productCode": "INTERNET-500",
+  "status": "PENDING",
+  "createdAt": "2026-10-29T13:00:00.123456Z",
+  "updatedAt": "2026-10-29T13:00:00.123456Z"
+}
+```
+
+Datas são ISO-8601 em UTC (sufixo `Z`), com precisão de microssegundos.
+
+### Consultar
+
+```bash
+curl localhost:8080/api/v1/requests/0b5c8f1e-6a51-4a3e-9d4c-2f8e7a1b3c9d
+```
+
+### Listar
+
+```bash
+curl 'localhost:8080/api/v1/requests?customerId=CUST-10001&status=PENDING&page=0&size=20'
+```
+
+| Parâmetro | Obrigatório | Regra |
+|---|---|---|
+| `status` | não | `PENDING`, `PROCESSING`, `COMPLETED` ou `FAILED` |
+| `customerId` | não | mesma regra do campo na criação |
+| `page` | não | a partir de `0`; padrão `0` |
+| `size` | não | `1` a `100`; padrão `20` |
+
+```json
+{
+  "content": [ { "id": "...", "status": "PENDING", "...": "..." } ],
+  "page": 0,
+  "size": 20,
+  "totalElements": 1,
+  "totalPages": 1
+}
+```
+
+A ordenação é fixa (`createdAt` decrescente, `id` como desempate) e não é exposta ao cliente: assim nenhuma consulta ordena por coluna sem índice.
+
+### Regras de validação da criação
+
+| Campo | Obrigatório | Tamanho | Caracteres aceitos |
+|---|---|---|---|
+| `externalId` | sim | 1 a 64 | letras, dígitos, `-` e `_` |
+| `customerId` | sim | 1 a 64 | letras, dígitos, `-` e `_` |
+| `productCode` | sim | 1 a 50 | letras **maiúsculas**, dígitos, `-` e `_` |
+
+Se a validação falha, nenhuma solicitação é gravada. Corpo que não é JSON válido, ou com campo de tipo incompatível, também resulta em `400`.
+
+### Formato de erro
+
+Todo erro da API é um [Problem Details (RFC 9457)](https://www.rfc-editor.org/rfc/rfc9457) com `Content-Type: application/problem+json` e o campo `traceId`:
+
+```json
+{
+  "type": "https://problems.ativacao.example/validation-error",
+  "title": "Dados inválidos",
+  "status": 400,
+  "detail": "Um ou mais campos são inválidos.",
+  "instance": "/api/v1/requests",
+  "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
+  "errors": [
+    { "field": "customerId", "message": "é obrigatório" }
+  ]
+}
+```
+
+| Situação | Status | `type` (sufixo) |
+|---|---|---|
+| Campos inválidos (corpo ou parâmetros da listagem) | `400` | `validation-error` (com `errors`) |
+| Parâmetro com tipo inválido (`id` não UUID, `status` desconhecido) | `400` | `invalid-parameter` |
+| Corpo ilegível | `400` | `malformed-body` |
+| Solicitação inexistente | `404` | `not-found` |
+| Erro inesperado | `500` | `internal-error` |
+| Demais erros do HTTP (`405`, `415`, ...) | o do erro | `about:blank` |
+
+O `type` usa o domínio reservado `.example`: é um identificador, não uma página. Respostas de erro nunca trazem stack trace, nome de classe, mensagem da exceção original nem detalhes do parser JSON. Um erro `500` é registrado no log em nível `ERROR` com o mesmo `traceId` devolvido ao cliente, o que permite localizar a falha a partir da resposta.
+
+## Decisões técnicas
+
+### Estados da solicitação
+
+```
+PENDING ──► PROCESSING ──► COMPLETED
+   ▲            │
+   │            ├────────► FAILED
+   └────────────┘
+   falha temporária (nova tentativa agendada)
+```
+
+- `COMPLETED` e `FAILED` são finais. Qualquer outra transição lança `InvalidStatusTransitionException` sem alterar a solicitação.
+- Uma falha temporária leva `PROCESSING → PENDING`, incrementa `attempts` e agenda `nextAttemptAt`. Assim, `PROCESSING` significa só "chamada ao provedor em andamento", e o processamento assíncrono (próxima etapa) busca apenas `PENDING` com `nextAttemptAt` vencido.
+- Toda solicitação nasce com `attempts = 0` e `nextAttemptAt = createdAt` (elegível na hora). Esses campos e a versão (`@Version`, lock otimista) são internos e não aparecem na API.
+
+### Entidade como modelo de domínio
+
+`ActivationRequest` é a entidade JPA e também o modelo de domínio: não tem setters públicos, e as transições acontecem só por métodos (`startProcessing`, `complete`, `fail`, `scheduleRetry`) que validam a regra antes de mudar qualquer campo. Um domínio separado com mapper dobraria o código de um agregado pequeno sem ganho real; o acoplamento ao JPA fica restrito a anotações, e as regras são testadas sem Spring nem banco. Os DTOs da API são `record`s separados da entidade.
+
+### Origem do `traceId`
+
+Micrometer Tracing com bridge OpenTelemetry, sem exportador de spans. Cada requisição HTTP recebe um trace no formato W3C (32 hex); o mesmo `traceId` vai para o MDC (padrão de log do Spring Boot) e para o ProblemDetail. Se o chamador enviar `traceparent`, o trace dele é continuado. A propagação ao provedor e a exportação para um coletor ficam para a etapa de observabilidade, sem mudar esta origem.
+
+### Índices da listagem
+
+| Índice | Atende |
+|---|---|
+| `(customer_id, created_at DESC)` | filtro por cliente, com ou sem `status`, já na ordem da paginação |
+| `(status, created_at DESC)` | filtro só por status (ex.: listar `FAILED`), já na ordem da paginação |
+
+A listagem sem filtro faz varredura e ordenação da tabela, aceitável no volume do desafio. Evolução: índice em `(created_at DESC)` ou paginação por cursor (`createdAt`, `id`) em vez de `page`/`size`.
+
+O schema é criado pelo Flyway (`db/migration`), e o Hibernate só valida que entidade e tabela batem (`spring.jpa.hibernate.ddl-auto=validate`).
+
 ## Produção
 
 ### Imagem de contêiner

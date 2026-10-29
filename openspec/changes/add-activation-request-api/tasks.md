@@ -28,7 +28,7 @@
 
 ## 6. Documentação e verificação final
 
-- [ ] 6.1 Atualizar README: uso da API com `curl` (criar, consultar, listar), tabela de regras de validação, formato de erro com `traceId`, decisões desta change (estados e `PROCESSING → PENDING`, entidade como modelo de domínio, origem do `traceId`, índices da listagem e evolução sem filtro); rodar `./mvnw verify` verde
+- [x] 6.1 Atualizar README: uso da API com `curl` (criar, consultar, listar), tabela de regras de validação, formato de erro com `traceId`, decisões desta change (estados e `PROCESSING → PENDING`, entidade como modelo de domínio, origem do `traceId`, índices da listagem e evolução sem filtro); rodar `./mvnw verify` verde
 
 ## Workflow follow-up
 
