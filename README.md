@@ -10,10 +10,37 @@ Desafio técnico Java (Spring Boot 4.1.2, Java 21), desenvolvido com Spec-Driven
 
 ## Como executar
 
+### Tudo com Docker Compose
+
+Pré-requisito: Docker.
+
+```bash
+docker compose up --build
+```
+
+Sobe aplicação, PostgreSQL e o mock do provedor externo, cada um com health check. A aplicação só inicia depois que o banco está saudável. Para rodar em segundo plano e esperar todos ficarem saudáveis, use `docker compose up --build -d --wait`.
+
+| Serviço | Porta | Descrição |
+|---|---|---|
+| `app` | `8080` | Aplicação |
+| `postgres` | `5432` | PostgreSQL |
+| `wiremock` | `8089` | Mock do provedor externo (WireMock); stubs em `wiremock/mappings/` |
+
+```bash
+curl localhost:8080/actuator/health/readiness
+curl -X POST localhost:8089/provider/v1/activate
+```
+
+Para parar e apagar os dados: `docker compose down -v`.
+
+> O enunciado pede um `docker-compose.yml` na seção Entrega. O arquivo aqui se chama `compose.yaml`, o nome padrão e preferido da [Compose Specification](https://github.com/compose-spec/compose-spec/blob/main/spec.md#compose-file); `docker-compose.yml` só é aceito por compatibilidade. O `docker compose` encontra o arquivo sem nenhuma opção extra, então ele cumpre o mesmo papel.
+
+### Aplicação local, dependências no Docker
+
 Pré-requisitos: Java 21 e Docker.
 
 ```bash
-docker compose up -d
+docker compose up -d postgres wiremock
 ./mvnw spring-boot:run -Dspring-boot.run.profiles=local
 ```
 
