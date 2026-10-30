@@ -2,7 +2,7 @@
 
 ## 1. Regras de camadas
 
-- [ ] 1.1 Adicionar `archunit-junit5` 1.5.1 em teste com `<archunit.version>` (design, decisões 10 e 12); criar `LayerDependencyRulesTest` com a regra de camadas da decisão 10 exposta como método estático e as fixtures em `src/test/java/.../archfixture/activation/{domain,infrastructure}` (classe de `domain` importando `infrastructure`); casos "Código atual respeita as regras" e "Violação quebra o build" (`AssertionError` citando a dependência); verificar com `./mvnw verify`
+- [x] 1.1 Adicionar `archunit-junit5` 1.5.1 em teste com `<archunit.version>` (design, decisões 10 e 12); criar `LayerDependencyRulesTest` com a regra de camadas da decisão 10 exposta como método estático e as fixtures em `src/test/java/.../archfixture/activation/{domain,infrastructure}` (classe de `domain` importando `infrastructure`); casos "Código atual respeita as regras" e "Violação quebra o build" (`AssertionError` citando a dependência); verificar com `./mvnw verify`
 
 ## 2. Logs JSON e tracing com OpenTelemetry
 
