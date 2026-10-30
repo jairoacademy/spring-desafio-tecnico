@@ -3,6 +3,7 @@ package academy.jairo.springdesafiotecnico.activation.application;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 import academy.jairo.springdesafiotecnico.activation.domain.ActivationRequest;
@@ -10,6 +11,9 @@ import academy.jairo.springdesafiotecnico.activation.domain.FailureReason;
 import academy.jairo.springdesafiotecnico.activation.infrastructure.ActivationRequestRepository;
 import academy.jairo.springdesafiotecnico.activation.infrastructure.provider.ProviderGateway;
 import academy.jairo.springdesafiotecnico.activation.infrastructure.provider.ProviderOutcome;
+import io.micrometer.tracing.Span;
+import io.micrometer.tracing.Tracer;
+import io.micrometer.tracing.propagation.Propagator;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,26 +44,50 @@ public class ActivationDispatcher {
 
 	private final Clock clock;
 
+	private final Tracer tracer;
+
+	private final Propagator propagator;
+
 	public ActivationDispatcher(ActivationRequestRepository repository, ProviderGateway gateway,
 			RetryPolicy retryPolicy, ActivationDispatchProperties properties,
-			PlatformTransactionManager transactionManager, Clock clock) {
+			PlatformTransactionManager transactionManager, Clock clock, Tracer tracer, Propagator propagator) {
 		this.repository = repository;
 		this.gateway = gateway;
 		this.retryPolicy = retryPolicy;
 		this.properties = properties;
 		this.transaction = new TransactionTemplate(transactionManager);
 		this.clock = clock;
+		this.tracer = tracer;
+		this.propagator = propagator;
 	}
 
 	/** Um ciclo do worker. Devolve quantas solicitações foram reservadas. */
 	public int dispatchDue() {
 		List<ClaimedRequest> claimed = claimDue();
 		for (ClaimedRequest request : claimed) {
-			ProviderOutcome outcome = gateway.activate(request.id(), request.externalId(), request.customerId(),
-					request.productCode());
-			applyOutcome(request, outcome);
+			Span span = startDispatchSpan(request);
+			try (Tracer.SpanInScope ignored = tracer.withSpan(span)) {
+				ProviderOutcome outcome = gateway.activate(request.id(), request.externalId(), request.customerId(),
+						request.productCode());
+				applyOutcome(request, outcome);
+			}
+			finally {
+				span.end();
+			}
 		}
 		return claimed.size();
+	}
+
+	/**
+	 * Span do envio, filho do contexto gravado na criação; sem contexto ou com valor inválido, abre um trace
+	 * novo. Em escopo, o MDC e o header {@code traceparent} ao provedor levam o {@code traceId} do span.
+	 */
+	private Span startDispatchSpan(ClaimedRequest request) {
+		String traceParent = request.traceParent();
+		Span.Builder builder = traceParent != null
+				? propagator.extract(Map.of(ActivationRequestService.TRACEPARENT, traceParent), Map::get)
+				: tracer.spanBuilder();
+		return builder.name("activation.dispatch").tag("activation.id", request.id().toString()).start();
 	}
 
 	/**
@@ -91,7 +119,8 @@ public class ActivationDispatcher {
 			return repository.saveAllAndFlush(due)
 				.stream()
 				.map(request -> new ClaimedRequest(request.getId(), Objects.requireNonNull(request.getVersion()),
-						request.getExternalId(), request.getCustomerId(), request.getProductCode()))
+						request.getExternalId(), request.getCustomerId(), request.getProductCode(),
+						request.getTraceParent()))
 				.toList();
 		});
 		return Objects.requireNonNull(claimed);
