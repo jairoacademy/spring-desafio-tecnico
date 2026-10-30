@@ -289,13 +289,13 @@ Os três sintomas sobem juntos com CPU e memória normais → suspeita de **espe
 
 ## 7. Checklist rápido
 
-- [ ] Projeto gerado no start.spring.io com Boot 4.1.2 e starters modulares
-- [ ] `openspec init` + contexto do projeto + `CLAUDE.md` commitados
-- [ ] Nenhum `@MockBean`, `spring-boot-starter-web` ou `com.fasterxml.jackson.databind` no código
+- [x] Projeto gerado no start.spring.io com Boot 4.1.2 e starters modulares
+- [x] `openspec init` + contexto do projeto + `CLAUDE.md` commitados
+- [x] Nenhum `@MockBean`, `spring-boot-starter-web` ou `com.fasterxml.jackson.databind` no código
 - [ ] Decisões da seção 3 revisadas por mim
-- [ ] Changes 1 → 6 propostas, validadas, aplicadas e arquivadas
-- [ ] `./mvnw verify` verde a partir de clone limpo
-- [ ] `docker compose up` sobe app + banco + mock
-- [ ] README completo + ADRs
-- [ ] Histórico de commits pequenos e com intenção clara
+- [x] Changes 1 → 6 propostas, validadas, aplicadas e arquivadas
+- [x] `./mvnw verify` verde a partir de clone limpo
+- [x] `docker compose up` sobe app + banco + mock
+- [x] README completo + ADRs
+- [x] Histórico de commits pequenos e com intenção clara
 - [ ] Repositório enviado para junio@deroyque.com dentro do prazo
