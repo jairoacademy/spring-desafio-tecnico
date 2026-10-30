@@ -85,7 +85,7 @@ O pipeline de CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) roda a c
 
 ### Coleção Bruno
 
-Coleção [Bruno](https://www.usebruno.com/) em [`bruno/`](bruno/). Abra a pasta no app e rode as pastas em ordem (`01` antes de `04`), ou execute `bru run --env local` dentro de `bruno/` se tiver o Bruno CLI instalado. A coleção obtém o token sozinha (OAuth 2.0 client credentials como `sistema-a`, no serviço `oauth2` do `compose.yaml`); a pasta `06 Segurança` mostra `401`, `403` e o isolamento entre clientes.
+Coleção [Bruno](https://www.usebruno.com/) em [`bruno/`](bruno/). Abra a pasta no app e rode as pastas em ordem (`01` antes de `04`), ou execute `bru run --env local` dentro de `bruno/` se tiver o Bruno CLI instalado. A coleção obtém o token sozinha (OAuth 2.0 client credentials como `sistema-a`, no serviço `oauth2` do `compose.yaml`); a pasta `06 Segurança` mostra `401`, `403` e o isolamento entre clientes; a `00 Health` inclui as métricas em `/actuator/prometheus`.
 
 ### Configuração do banco
 
@@ -519,7 +519,7 @@ docker run --rm -p 8080:8080 \
   ativacao
 ```
 
-A imagem tem `HEALTHCHECK` em `/actuator/health/readiness`.
+A imagem tem `HEALTHCHECK` em `/actuator/health/readiness`; o serviço `app` do `compose.yaml` declara o mesmo health check e `stop_grace_period: 40s` (acima do `SHUTDOWN_TIMEOUT`).
 
 ### Variáveis de ambiente obrigatórias
 
@@ -534,6 +534,27 @@ A imagem tem `HEALTHCHECK` em `/actuator/health/readiness`.
 | `JWT_AUDIENCE` | Audiência exigida no JWT (`aud`) |
 
 Demais ajustes do provedor e do envio em [Configuração do provedor e do envio](#configuração-do-provedor-e-do-envio).
+
+### Observabilidade em produção
+
+| Variável | Padrão | Descrição |
+|---|---|---|
+| `TRACING_SAMPLING_PROBABILITY` | `1.0` | Fração dos traces amostrados e exportados. O `traceId` existe mesmo fora da amostra (logs, ProblemDetail, header); só o span não é exportado. Reduza em produção (ex.: `0.1`). |
+| `OTLP_TRACING_ENABLED` | `false` | Liga a exportação de spans por OTLP. Desligada, nada é exportado. |
+| `OTLP_TRACING_ENDPOINT` | `http://localhost:4318/v1/traces` | Endpoint OTLP/HTTP do coletor. Só vale com `OTLP_TRACING_ENABLED=true`. |
+| `SHUTDOWN_TIMEOUT` | `30s` | Prazo do [encerramento gracioso](#encerramento-gracioso). |
+
+Para enviar os traces a um coletor (OpenTelemetry Collector, Jaeger, Tempo), aponte o endpoint para ele; o Compose do projeto não sobe coletor:
+
+```bash
+docker run --rm -p 8080:8080 \
+  -e OTLP_TRACING_ENABLED=true \
+  -e OTLP_TRACING_ENDPOINT=http://<coletor>:4318/v1/traces \
+  -e TRACING_SAMPLING_PROBABILITY=0.1 \
+  ... ativacao
+```
+
+`/actuator/prometheus` não exige token, para o Prometheus fazer scrape sem client credentials; o conteúdo é agregado e sem dados de negócio. Em produção, restrinja o acesso pela rede: o ideal é uma porta de gerenciamento separada (`management.server.port`) alcançável só na rede interna, ou uma regra no proxy/ingress que bloqueie `/actuator/prometheus` fora do cluster. Isso não está configurado aqui para não mudar as portas do Compose e do CI.
 
 ### Memória da JVM
 

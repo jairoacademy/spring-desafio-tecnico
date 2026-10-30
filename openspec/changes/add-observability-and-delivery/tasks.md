@@ -22,7 +22,7 @@
 ## 5. Encerramento gracioso e entrega
 
 - [x] 5.1 Propriedades de encerramento gracioso da decisão 8 com `${SHUTDOWN_TIMEOUT:30s}`; criar `GracefulShutdownIntegrationTests` (contexto próprio via `SpringApplicationBuilder`, WireMock com atraso de 2 s, fechar o contexto com a chamada em andamento, conferir `COMPLETED` por JDBC no contêiner); atualizar o README (variável `SHUTDOWN_TIMEOUT` e o que acontece com itens não enviados quando o prazo estoura); verificar com `./mvnw verify`
-- [ ] 5.2 `compose.yaml`: health check do `app` igual ao do `Dockerfile` e `stop_grace_period: 40s` (decisões 8 e 9); passo novo no job `compose-smoke` do CI conferindo `http_server_requests_seconds` em `/actuator/prometheus`; request `Métricas` na coleção Bruno; atualizar o README (variáveis `TRACING_SAMPLING_PROBABILITY` e `OTLP_TRACING_ENDPOINT`, como exportar traces para um coletor, `/actuator/prometheus` restrito pela rede em Produção); verificar com `docker compose up --build --wait` e os mesmos comandos do passo novo do CI
+- [x] 5.2 `compose.yaml`: health check do `app` igual ao do `Dockerfile` e `stop_grace_period: 40s` (decisões 8 e 9); passo novo no job `compose-smoke` do CI conferindo `http_server_requests_seconds` em `/actuator/prometheus`; request `Métricas` na coleção Bruno; atualizar o README (variáveis `TRACING_SAMPLING_PROBABILITY` e `OTLP_TRACING_ENDPOINT`, como exportar traces para um coletor, `/actuator/prometheus` restrito pela rede em Produção); verificar com `docker compose up --build --wait` e os mesmos comandos do passo novo do CI
 
 ## 6. Decisões e verificação final
 
