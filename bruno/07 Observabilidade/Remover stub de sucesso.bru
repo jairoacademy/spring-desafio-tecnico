@@ -1,0 +1,22 @@
+meta {
+  name: Remover stub de sucesso
+  type: http
+  seq: 8
+}
+
+delete {
+  url: {{providerUrl}}/__admin/mappings/{{retryStubOkId}}
+  body: none
+  auth: none
+}
+
+tests {
+  test("200 stub removido", function() {
+    expect(res.status).to.equal(200);
+  });
+}
+
+docs {
+  Remove o stub que respondia `200`. O WireMock volta a responder `200` a toda ativação
+  (mapping de `wiremock/mappings/`).
+}

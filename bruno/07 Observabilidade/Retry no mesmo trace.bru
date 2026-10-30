@@ -1,0 +1,47 @@
+meta {
+  name: Retry no mesmo trace
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{providerUrl}}/__admin/requests/find
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "method": "POST",
+    "url": "/provider/v1/activate",
+    "headers": { "Idempotency-Key": { "equalTo": "{{retryRequestId}}" } }
+  }
+}
+
+script:pre-request {
+  // falha 500, backoff de 1 a 2 s (base de 2 s com jitter) e segundo envio
+  await bru.sleep(6000);
+}
+
+tests {
+  test("duas chamadas ao provedor", function() {
+    expect(res.status).to.equal(200);
+    expect(res.body.requests).to.have.length(2);
+  });
+
+  test("as duas carregam o traceId do POST", function() {
+    const re = new RegExp("^00-" + bru.getVar("retryTraceId") + "-[0-9a-f]{16}-[0-9a-f]{2}$");
+    res.body.requests.forEach(function(call) {
+      expect(call.headers["traceparent"]).to.match(re);
+    });
+  });
+}
+
+docs {
+  O contexto de trace fica gravado na solicitação, então a nova tentativa continua o mesmo
+  trace. Cada envio tem o próprio `spanId`.
+}

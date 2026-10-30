@@ -1,0 +1,21 @@
+meta {
+  name: Remover stub de falha
+  type: http
+  seq: 7
+}
+
+delete {
+  url: {{providerUrl}}/__admin/mappings/{{retryStubFailId}}
+  body: none
+  auth: none
+}
+
+tests {
+  test("200 stub removido", function() {
+    expect(res.status).to.equal(200);
+  });
+}
+
+docs {
+  Remove o stub que respondia `500`. Falta o stub do `200`, na próxima request.
+}

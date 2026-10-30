@@ -1,0 +1,71 @@
+meta {
+  name: Stubs de falha única
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{providerUrl}}/__admin/mappings/import
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "mappings": [
+      {
+        "id": "{{retryStubFailId}}",
+        "priority": 1,
+        "scenarioName": "{{retryScenario}}",
+        "requiredScenarioState": "Started",
+        "newScenarioState": "Recuperado",
+        "request": {
+          "method": "POST",
+          "url": "/provider/v1/activate",
+          "bodyPatterns": [ { "matchesJsonPath": "$[?(@.externalId == '{{retryExternalId}}')]" } ]
+        },
+        "response": { "status": 500 }
+      },
+      {
+        "id": "{{retryStubOkId}}",
+        "priority": 1,
+        "scenarioName": "{{retryScenario}}",
+        "requiredScenarioState": "Recuperado",
+        "request": {
+          "method": "POST",
+          "url": "/provider/v1/activate",
+          "bodyPatterns": [ { "matchesJsonPath": "$[?(@.externalId == '{{retryExternalId}}')]" } ]
+        },
+        "response": { "status": 200 }
+      }
+    ]
+  }
+}
+
+script:pre-request {
+  const uuid = function() {
+    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function(c) {
+      const r = Math.random() * 16 | 0;
+      return (c === "x" ? r : (r & 0x3 | 0x8)).toString(16);
+    });
+  };
+  bru.setVar("retryExternalId", "EXT-RETRY-" + Date.now());
+  bru.setVar("retryScenario", "retry-" + Date.now());
+  bru.setVar("retryStubFailId", uuid());
+  bru.setVar("retryStubOkId", uuid());
+}
+
+tests {
+  test("200 stubs importados no WireMock", function() {
+    expect(res.status).to.equal(200);
+  });
+}
+
+docs {
+  Chama a API de administração do WireMock. Um cenário com dois stubs para um `externalId`
+  gerado aqui: o primeiro envio recebe `500`, o segundo `200`. Não afeta as outras pastas.
+}

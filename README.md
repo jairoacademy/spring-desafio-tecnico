@@ -85,7 +85,7 @@ O pipeline de CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) roda a c
 
 ### Coleção Bruno
 
-Coleção [Bruno](https://www.usebruno.com/) em [`bruno/`](bruno/). Abra a pasta no app e rode as pastas em ordem (`01` antes de `04`), ou execute `bru run --env local` dentro de `bruno/` se tiver o Bruno CLI instalado. A coleção obtém o token sozinha (OAuth 2.0 client credentials como `sistema-a`, no serviço `oauth2` do `compose.yaml`); a pasta `06 Segurança` mostra `401`, `403` e o isolamento entre clientes; a `00 Health` inclui as métricas em `/actuator/prometheus`.
+Coleção [Bruno](https://www.usebruno.com/) em [`bruno/`](bruno/). Abra a pasta no app e rode as pastas em ordem (`01` antes de `04`), ou execute `bru run --env local` dentro de `bruno/` se tiver o Bruno CLI instalado. A coleção obtém o token sozinha (OAuth 2.0 client credentials como `sistema-a`, no serviço `oauth2` do `compose.yaml`); a pasta `06 Segurança` mostra `401`, `403` e o isolamento entre clientes; a `00 Health` inclui as métricas em `/actuator/prometheus` e confere que `/actuator/env` responde `404`; a `07 Observabilidade` mostra o `traceId` do `POST` chegando ao provedor, inclusive na nova tentativa depois de um `500`, e as métricas de negócio.
 
 ### Configuração do banco
 

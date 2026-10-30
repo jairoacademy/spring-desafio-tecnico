@@ -1,0 +1,46 @@
+meta {
+  name: Criar com falha única
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/v1/requests
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+  traceparent: 00-{{retryTraceId}}-00f067aa0ba902b7-01
+}
+
+body:json {
+  {
+    "externalId": "{{retryExternalId}}",
+    "customerId": "{{customerId}}",
+    "productCode": "INTERNET-500"
+  }
+}
+
+script:pre-request {
+  bru.setVar("retryTraceId", "4bf92f3577b34da6a3ce929d0e1e" + (Date.now() % 10000).toString().padStart(4, "0"));
+}
+
+script:post-response {
+  if (res.status === 201) {
+    bru.setVar("retryRequestId", res.body.id);
+  }
+}
+
+tests {
+  test("201 PENDING", function() {
+    expect(res.status).to.equal(201);
+    expect(res.body.status).to.equal("PENDING");
+  });
+}
+
+docs {
+  Cria a solicitação cujo primeiro envio recebe `500` (stub da request anterior). O worker
+  tenta de novo depois do backoff.
+}
