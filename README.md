@@ -180,6 +180,12 @@ increase(activation_requests_transitions_total{status="FAILED"}[5m])
 
 O contador mede eventos, não estoque: quantas solicitações `PENDING` há agora (um gauge consultando o banco) fica como melhoria futura.
 
+### Encerramento gracioso
+
+Ao receber o pedido de parada (`SIGTERM`), o servidor HTTP termina as requisições em andamento e o agendador deixa de iniciar ciclos do worker e espera o ciclo em curso, antes de o acesso ao banco fechar. O prazo vem de `SHUTDOWN_TIMEOUT` (padrão `30s`). O `GracefulShutdownIntegrationTests` fecha a aplicação com um envio lento em andamento e confere que a solicitação termina `COMPLETED`.
+
+Se o prazo estoura, os itens do lote já reservados e ainda não enviados ficam em `PROCESSING`; a reconciliação os devolve para `PENDING` depois de `stale-after` (conta uma tentativa, mesma `Idempotency-Key`). Um lote de 10 itens com `read-timeout` de 5 s pode passar de 30 s em um provedor travado; aumente `SHUTDOWN_TIMEOUT` e o `stop_grace_period` do orquestrador juntos, este sempre maior.
+
 ## API
 
 | Método e caminho | Escopo exigido | Descrição | Sucesso |
