@@ -1,0 +1,43 @@
+meta {
+  name: Métricas de negócio
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/actuator/prometheus
+  body: none
+  auth: none
+}
+
+tests {
+  test("200 sem token", function() {
+    expect(res.status).to.equal(200);
+  });
+
+  test("latência da API por template de rota", function() {
+    expect(res.body).to.match(/http_server_requests_seconds_count\{[^}]*uri="\/api\/v1\/requests"/);
+  });
+
+  test("latência do provedor", function() {
+    expect(res.body).to.match(/http_client_requests_seconds_count\{[^}]*uri="\/provider\/v1\/activate"/);
+  });
+
+  test("solicitações por status", function() {
+    ["PENDING", "PROCESSING", "COMPLETED"].forEach(function(status) {
+      const re = new RegExp('activation_requests_transitions_total\\{[^}]*status="' + status + '"[^}]*\\} [1-9]');
+      expect(res.body).to.match(re);
+    });
+  });
+
+  test("sem identificadores nos rótulos", function() {
+    expect(res.body).to.not.include(bru.getVar("traceRequestId"));
+    expect(res.body).to.not.include(bru.getVar("externalId"));
+  });
+}
+
+docs {
+  Depois do fluxo anterior: latência da API (`http_server_requests_seconds`), do provedor
+  (`http_client_requests_seconds`) e o contador `activation_requests_transitions_total` por
+  status. O `uri` é o template da rota; id e `externalId` nunca viram rótulo.
+}

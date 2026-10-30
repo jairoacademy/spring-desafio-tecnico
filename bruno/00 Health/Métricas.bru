@@ -1,0 +1,26 @@
+meta {
+  name: Métricas
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/actuator/prometheus
+  body: none
+  auth: none
+}
+
+tests {
+  test("200 sem token", function() {
+    expect(res.status).to.equal(200);
+  });
+  test("traz a latência da API", function() {
+    expect(res.body).to.include("http_server_requests_seconds");
+  });
+}
+
+docs {
+  Métricas no formato do Prometheus: latência da API (http_server_requests_seconds), do provedor
+  (http_client_requests_seconds) e solicitações por status (activation_requests_transitions_total).
+  Só agregados, sem token. Faça algumas chamadas autenticadas antes para ver a latência da API.
+}

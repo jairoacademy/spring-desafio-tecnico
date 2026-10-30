@@ -1,0 +1,23 @@
+meta {
+  name: Actuator sensível
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/actuator/env
+  body: none
+  auth: inherit
+}
+
+tests {
+  test("404 endpoint não exposto", function() {
+    expect(res.status).to.equal(404);
+  });
+}
+
+docs {
+  Só `health` e `prometheus` são expostos. `env`, `beans` e `configprops` revelam configuração
+  interna e respondem `404` mesmo com token. Sem token a resposta seria `401`, porque a regra
+  de segurança vem antes do roteamento; por isso esta request usa a auth da collection.
+}

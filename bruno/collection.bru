@@ -47,7 +47,8 @@ docs {
   `06 Segurança` troca de cliente por request para mostrar `401`, `403` e o isolamento.
 
   **Exercício de correlação:** em qualquer resposta de erro, copie o `traceId` e procure
-  no console do IntelliJ. Toda linha de log daquela requisição tem `[traceId-spanId]`.
+  no console da aplicação. Os logs saem em JSON e toda linha daquela requisição tem os campos
+  `traceId` e `spanId` (veja a seção de logs do README).
 
   Cada request tem uma aba **Docs** com o que observar e uma aba **Tests** com asserts.
 }

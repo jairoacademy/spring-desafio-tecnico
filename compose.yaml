@@ -30,6 +30,15 @@ services:
       JWT_AUDIENCE: ativacao-api
     ports:
       - "8080:8080"
+    # mesmo comando do HEALTHCHECK do Dockerfile, visível aqui e independente da imagem
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8080/actuator/health/readiness"]
+      interval: 10s
+      timeout: 3s
+      start_period: 30s
+      retries: 5
+    # acima de SHUTDOWN_TIMEOUT (30s), para o Docker não matar o processo no meio do encerramento gracioso
+    stop_grace_period: 40s
     depends_on:
       postgres:
         condition: service_healthy

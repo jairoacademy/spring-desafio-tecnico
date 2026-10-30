@@ -14,8 +14,8 @@ import org.springframework.security.web.SecurityFilterChain;
 
 /**
  * API como OAuth 2.0 Resource Server: JWT validado pelo decoder do Boot (JWKS, {@code iss}, {@code aud},
- * {@code exp}), autorização por escopo e {@code 401}/{@code 403} em ProblemDetail. Os probes de saúde ficam
- * públicos para o orquestrador.
+ * {@code exp}), autorização por escopo e {@code 401}/{@code 403} em ProblemDetail. Os probes de saúde e as métricas
+ * agregadas ficam públicos para o orquestrador e o Prometheus.
  */
 @Configuration(proxyBeanMethods = false)
 class SecurityConfiguration {
@@ -30,6 +30,8 @@ class SecurityConfiguration {
 			ProblemAccessDeniedHandler accessDeniedHandler) {
 		http.authorizeHttpRequests(auth -> auth
 				.requestMatchers("/actuator/health/**").permitAll()
+				// só métricas agregadas, sem dados de negócio; o Prometheus faz scrape sem token (design.md, decisão 7)
+				.requestMatchers("/actuator/prometheus").permitAll()
 				.requestMatchers(HttpMethod.POST, "/api/v1/requests").hasAuthority("SCOPE_activation:write")
 				.requestMatchers(HttpMethod.GET, "/api/v1/requests", "/api/v1/requests/*")
 				.hasAuthority("SCOPE_activation:read")

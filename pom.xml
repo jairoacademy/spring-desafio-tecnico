@@ -30,6 +30,8 @@
 		<java.version>21</java.version>
 		<!-- mesma versão da imagem do compose.yaml; fora do BOM do Boot -->
 		<wiremock.version>3.13.2</wiremock.version>
+		<!-- fora do BOM do Boot -->
+		<archunit.version>1.5.1</archunit.version>
 	</properties>
 	<dependencies>
 		<dependency>
@@ -62,14 +64,16 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-webmvc</artifactId>
 		</dependency>
-		<!-- Micrometer Tracing + bridge OpenTelemetry, sem exportador de spans: origem do traceId (design.md, decisão 9) -->
+		<!-- Tracing OpenTelemetry com exportação OTLP opcional; origem do traceId (design.md, decisões 4 e 12) -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-micrometer-tracing-opentelemetry</artifactId>
+			<artifactId>spring-boot-starter-opentelemetry</artifactId>
 		</dependency>
+		<!-- formato e endpoint /actuator/prometheus (design.md, decisões 6 e 12) -->
 		<dependency>
 			<groupId>io.micrometer</groupId>
-			<artifactId>micrometer-tracing-bridge-otel</artifactId>
+			<artifactId>micrometer-registry-prometheus</artifactId>
+			<scope>runtime</scope>
 		</dependency>
 		<dependency>
 			<groupId>org.flywaydb</groupId>
@@ -142,6 +146,13 @@
 		<dependency>
 			<groupId>org.awaitility</groupId>
 			<artifactId>awaitility</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<!-- regras de camadas verificadas no build (design.md, decisões 10 e 12) -->
+		<dependency>
+			<groupId>com.tngtech.archunit</groupId>
+			<artifactId>archunit-junit5</artifactId>
+			<version>${archunit.version}</version>
 			<scope>test</scope>
 		</dependency>
 	</dependencies>

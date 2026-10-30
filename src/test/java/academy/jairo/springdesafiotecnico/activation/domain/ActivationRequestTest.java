@@ -24,7 +24,7 @@ class ActivationRequestTest {
 	private static final Instant T2 = T0.plusSeconds(20);
 
 	private static ActivationRequest newRequest() {
-		return ActivationRequest.create(OWNER, "EXT-1", "CUST-1", "INTERNET-500", T0);
+		return ActivationRequest.create(OWNER, "EXT-1", "CUST-1", "INTERNET-500", T0, null);
 	}
 
 	private static ActivationRequest processingRequest() {

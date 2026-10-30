@@ -85,7 +85,7 @@ O pipeline de CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) roda a c
 
 ### Coleção Bruno
 
-Coleção [Bruno](https://www.usebruno.com/) em [`bruno/`](bruno/). Abra a pasta no app e rode as pastas em ordem (`01` antes de `04`), ou execute `bru run --env local` dentro de `bruno/` se tiver o Bruno CLI instalado. A coleção obtém o token sozinha (OAuth 2.0 client credentials como `sistema-a`, no serviço `oauth2` do `compose.yaml`); a pasta `06 Segurança` mostra `401`, `403` e o isolamento entre clientes.
+Coleção [Bruno](https://www.usebruno.com/) em [`bruno/`](bruno/). Abra a pasta no app e rode as pastas em ordem (`01` antes de `04`), ou execute `bru run --env local` dentro de `bruno/` se tiver o Bruno CLI instalado. A coleção obtém o token sozinha (OAuth 2.0 client credentials como `sistema-a`, no serviço `oauth2` do `compose.yaml`); a pasta `06 Segurança` mostra `401`, `403` e o isolamento entre clientes; a `00 Health` inclui as métricas em `/actuator/prometheus` e confere que `/actuator/env` responde `404`; a `07 Observabilidade` mostra o `traceId` do `POST` chegando ao provedor, inclusive na nova tentativa depois de um `500`, e as métricas de negócio.
 
 ### Configuração do banco
 
@@ -143,6 +143,48 @@ curl localhost:8080/actuator/health/readiness
 ```
 
 Os demais endpoints do Actuator (`env`, `beans`, `configprops` etc.) não são expostos via HTTP.
+
+### Logs
+
+Os logs saem no console em JSON, um objeto por linha (formato Logstash do Spring Boot). Todo log emitido durante uma requisição ou um envio ao provedor traz `traceId` e `spanId`, o mesmo `traceId` do ProblemDetail de erro. Tokens e credenciais não são logados.
+
+```json
+{"@timestamp":"2026-10-30T12:00:00.000Z","level":"ERROR","message":"Erro inesperado ...","traceId":"4bf92f3577b34da6a3ce929d0e0e4736","spanId":"00f067aa0ba902b7", ...}
+```
+
+Para ler no terminal local, use `jq`: `./mvnw spring-boot:run | jq -R 'fromjson? // .'` ou, para achar um erro pelo `traceId` devolvido ao cliente: `... | grep 4bf92f35 | jq .`
+
+### Métricas
+
+`GET /actuator/prometheus` expõe as métricas no formato de texto do Prometheus, sem token (só agregados, sem dados de negócio; ver [Produção](#produção) para restringir por rede). Os rótulos nunca levam `id`, `externalId` nem `customerId`: o `uri` é o template da rota (`/api/v1/requests/{id}`).
+
+| Pergunta | Métrica | Origem |
+|---|---|---|
+| Latência da API | `http_server_requests_seconds` (`uri`, `method`, `status`, `outcome`) | automática |
+| Latência e erros do provedor | `http_client_requests_seconds` (`uri="/provider/v1/activate"`, `status`, `outcome`, `exception`) | automática; timeout aparece com `status="CLIENT_ERROR"` |
+| Solicitações por status | `activation_requests_transitions_total{status}` | contador de transições para cada status |
+
+Consultas de exemplo (PromQL):
+
+```promql
+# p95 da API por rota, janela de 5 min
+histogram_quantile(0.95, sum by (le, uri) (rate(http_server_requests_seconds_bucket[5m])))
+
+# taxa de erro do provedor (respostas 5xx e falhas de I/O)
+sum(rate(http_client_requests_seconds_count{uri="/provider/v1/activate", outcome!="SUCCESS"}[5m]))
+  / sum(rate(http_client_requests_seconds_count{uri="/provider/v1/activate"}[5m]))
+
+# solicitações que falharam de vez nos últimos 5 min
+increase(activation_requests_transitions_total{status="FAILED"}[5m])
+```
+
+O contador mede eventos, não estoque: quantas solicitações `PENDING` há agora (um gauge consultando o banco) fica como melhoria futura.
+
+### Encerramento gracioso
+
+Ao receber o pedido de parada (`SIGTERM`), o servidor HTTP termina as requisições em andamento e o agendador deixa de iniciar ciclos do worker e espera o ciclo em curso, antes de o acesso ao banco fechar. O prazo vem de `SHUTDOWN_TIMEOUT` (padrão `30s`). O `GracefulShutdownIntegrationTests` fecha a aplicação com um envio lento em andamento e confere que a solicitação termina `COMPLETED`.
+
+Se o prazo estoura, os itens do lote já reservados e ainda não enviados ficam em `PROCESSING`; a reconciliação os devolve para `PENDING` depois de `stale-after` (conta uma tentativa, mesma `Idempotency-Key`). Um lote de 10 itens com `read-timeout` de 5 s pode passar de 30 s em um provedor travado; aumente `SHUTDOWN_TIMEOUT` e o `stop_grace_period` do orquestrador juntos, este sempre maior.
 
 ## API
 
@@ -438,7 +480,11 @@ O teste `ActivationRequestConcurrencyIntegrationTests` dispara 10 criações sim
 
 ### Origem do `traceId`
 
-Micrometer Tracing com bridge OpenTelemetry, sem exportador de spans. Cada requisição HTTP recebe um trace no formato W3C (32 hex); o mesmo `traceId` vai para o MDC (padrão de log do Spring Boot) e para o ProblemDetail. Se o chamador enviar `traceparent`, o trace dele é continuado. A propagação ao provedor e a exportação para um coletor ficam para a etapa de observabilidade, sem mudar esta origem.
+Micrometer Tracing com OpenTelemetry (`spring-boot-starter-opentelemetry`). Cada requisição HTTP recebe um trace no formato W3C (32 hex); o mesmo `traceId` vai para o MDC (e daí para os [logs JSON](#logs)) e para o ProblemDetail. Se o chamador enviar `traceparent`, o trace dele é continuado.
+
+O envio ao provedor roda no worker, depois do `POST`. Para manter o mesmo `traceId`, a criação grava o `traceparent` da requisição na solicitação (coluna `trace_parent`, migração `V5`, só em registro novo). O worker abre o span `activation.dispatch` como filho desse contexto: os logs do envio e o header `traceparent` enviado ao provedor têm o `traceId` do `POST`, inclusive nas novas tentativas. Solicitação sem contexto gravado é enviada em um trace novo. A exportação dos spans para um coletor é opcional ([Observabilidade em produção](#observabilidade-em-produção)).
+
+Decisões registradas no [ADR 0006](docs/adr/0006-observabilidade.md).
 
 ### Índices da listagem
 
@@ -477,7 +523,7 @@ docker run --rm -p 8080:8080 \
   ativacao
 ```
 
-A imagem tem `HEALTHCHECK` em `/actuator/health/readiness`.
+A imagem tem `HEALTHCHECK` em `/actuator/health/readiness`; o serviço `app` do `compose.yaml` declara o mesmo health check e `stop_grace_period: 40s` (acima do `SHUTDOWN_TIMEOUT`).
 
 ### Variáveis de ambiente obrigatórias
 
@@ -492,6 +538,27 @@ A imagem tem `HEALTHCHECK` em `/actuator/health/readiness`.
 | `JWT_AUDIENCE` | Audiência exigida no JWT (`aud`) |
 
 Demais ajustes do provedor e do envio em [Configuração do provedor e do envio](#configuração-do-provedor-e-do-envio).
+
+### Observabilidade em produção
+
+| Variável | Padrão | Descrição |
+|---|---|---|
+| `TRACING_SAMPLING_PROBABILITY` | `1.0` | Fração dos traces amostrados e exportados. O `traceId` existe mesmo fora da amostra (logs, ProblemDetail, header); só o span não é exportado. Reduza em produção (ex.: `0.1`). |
+| `OTLP_TRACING_ENABLED` | `false` | Liga a exportação de spans por OTLP. Desligada, nada é exportado. |
+| `OTLP_TRACING_ENDPOINT` | `http://localhost:4318/v1/traces` | Endpoint OTLP/HTTP do coletor. Só vale com `OTLP_TRACING_ENABLED=true`. |
+| `SHUTDOWN_TIMEOUT` | `30s` | Prazo do [encerramento gracioso](#encerramento-gracioso). |
+
+Para enviar os traces a um coletor (OpenTelemetry Collector, Jaeger, Tempo), aponte o endpoint para ele; o Compose do projeto não sobe coletor:
+
+```bash
+docker run --rm -p 8080:8080 \
+  -e OTLP_TRACING_ENABLED=true \
+  -e OTLP_TRACING_ENDPOINT=http://<coletor>:4318/v1/traces \
+  -e TRACING_SAMPLING_PROBABILITY=0.1 \
+  ... ativacao
+```
+
+`/actuator/prometheus` não exige token, para o Prometheus fazer scrape sem client credentials; o conteúdo é agregado e sem dados de negócio. Em produção, restrinja o acesso pela rede: o ideal é uma porta de gerenciamento separada (`management.server.port`) alcançável só na rede interna, ou uma regra no proxy/ingress que bloqueie `/actuator/prometheus` fora do cluster. Isso não está configurado aqui para não mudar as portas do Compose e do CI.
 
 ### Memória da JVM
 

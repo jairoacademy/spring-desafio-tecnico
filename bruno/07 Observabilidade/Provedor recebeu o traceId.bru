@@ -1,0 +1,46 @@
+meta {
+  name: Provedor recebeu o traceId
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{providerUrl}}/__admin/requests/find
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "method": "POST",
+    "url": "/provider/v1/activate",
+    "headers": { "Idempotency-Key": { "equalTo": "{{traceRequestId}}" } }
+  }
+}
+
+script:pre-request {
+  // o worker roda a cada 1 s
+  await bru.sleep(2500);
+}
+
+tests {
+  test("uma chamada ao provedor", function() {
+    expect(res.status).to.equal(200);
+    expect(res.body.requests).to.have.length(1);
+  });
+
+  test("traceparent enviado ao provedor tem o traceId do POST", function() {
+    const header = res.body.requests[0].headers["traceparent"];
+    expect(header).to.match(new RegExp("^00-" + bru.getVar("traceId") + "-[0-9a-f]{16}-[0-9a-f]{2}$"));
+  });
+}
+
+docs {
+  Correlação da requisição até o provedor: o worker envia horas ou segundos depois, em outro
+  thread, mas o header `traceparent` da chamada carrega o `traceId` do `POST`. O span do envio
+  é novo (outro `spanId`), filho do span da requisição.
+}

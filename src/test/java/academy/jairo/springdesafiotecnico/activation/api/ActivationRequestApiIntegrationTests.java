@@ -97,6 +97,32 @@ class ActivationRequestApiIntegrationTests {
 	}
 
 	@Test
+	void storesTraceParentOfTheCreatingRequestOnlyOnNewRecords() throws Exception {
+		String traceId = "4bf92f3577b34da6a3ce929d0e0e4736";
+		String body = validBody("EXT-TRACEPARENT");
+
+		mockMvc
+			.perform(post("/api/v1/requests").with(TestTokens.readWrite())
+				.header("traceparent", "00-" + traceId + "-00f067aa0ba902b7-01")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(body))
+			.andExpect(status().isCreated());
+
+		String stored = repository.findByExternalId("EXT-TRACEPARENT").orElseThrow().getTraceParent();
+		assertThat(stored).matches("^00-" + traceId + "-[0-9a-f]{16}-01$");
+
+		// retry idempotente com outro contexto: vale o da criação
+		mockMvc
+			.perform(post("/api/v1/requests").with(TestTokens.readWrite())
+				.header("traceparent", "00-" + "a".repeat(32) + "-00f067aa0ba902b7-01")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(body))
+			.andExpect(status().isOk());
+
+		assertThat(repository.findByExternalId("EXT-TRACEPARENT").orElseThrow().getTraceParent()).isEqualTo(stored);
+	}
+
+	@Test
 	void locationHeaderPointsToCreatedId() throws Exception {
 		MvcResult result = postRequest(validBody("EXT-LOC")).andExpect(status().isCreated()).andReturn();
 
@@ -271,7 +297,7 @@ class ActivationRequestApiIntegrationTests {
 		postRequest(body("EXT-PENDING", customer)).andExpect(status().isCreated());
 		// nenhum endpoint desta change muda status: a solicitação PROCESSING é gravada direto pelo repositório
 		ActivationRequest processing = ActivationRequest.create(TestTokens.DEFAULT_CLIENT, "EXT-PROCESSING", customer,
-				"INTERNET-500", Instant.now());
+				"INTERNET-500", Instant.now(), null);
 		processing.startProcessing(Instant.now());
 		repository.save(processing);
 		postRequest(body("EXT-OTHER", uniqueCustomer("CUST-B"))).andExpect(status().isCreated());
@@ -289,7 +315,7 @@ class ActivationRequestApiIntegrationTests {
 		String customer = uniqueCustomer("CUST-F");
 		// a falha é gravada direto pelo repositório, sem passar pelo provedor
 		ActivationRequest failed = ActivationRequest.create(TestTokens.DEFAULT_CLIENT, "EXT-FAILED-" + customer,
-				customer, "INTERNET-500", Instant.now());
+				customer, "INTERNET-500", Instant.now(), null);
 		failed.startProcessing(Instant.now());
 		failed.fail(FailureReason.MAX_ATTEMPTS_EXCEEDED, Instant.now());
 		repository.save(failed);

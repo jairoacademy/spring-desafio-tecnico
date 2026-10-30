@@ -1,0 +1,48 @@
+meta {
+  name: Criar com traceparent
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/v1/requests
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+  traceparent: 00-{{traceId}}-00f067aa0ba902b7-01
+}
+
+body:json {
+  {
+    "externalId": "{{externalId}}",
+    "customerId": "{{customerId}}",
+    "productCode": "INTERNET-500"
+  }
+}
+
+script:pre-request {
+  bru.setVar("traceId", "4bf92f3577b34da6a3ce929d0e0e" + (Date.now() % 10000).toString().padStart(4, "0"));
+  bru.setVar("externalId", "EXT-TRACE-" + Date.now());
+}
+
+script:post-response {
+  if (res.status === 201) {
+    bru.setVar("traceRequestId", res.body.id);
+  }
+}
+
+tests {
+  test("201 PENDING", function() {
+    expect(res.status).to.equal(201);
+    expect(res.body.status).to.equal("PENDING");
+  });
+}
+
+docs {
+  Cria uma solicitação com um `traceparent` conhecido. O trace do chamador é continuado e o
+  contexto fica gravado na solicitação (coluna `trace_parent`). A próxima request mostra que o
+  provedor recebe o mesmo `traceId`.
+}
