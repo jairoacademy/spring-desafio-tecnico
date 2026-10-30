@@ -59,6 +59,10 @@ public class ActivationRequest {
 	@Column(name = "updated_at", nullable = false)
 	private Instant updatedAt;
 
+	/** Contexto de trace W3C ({@code traceparent}) da requisição de criação; ausente em linhas antigas. */
+	@Column(name = "trace_parent", length = 55, updatable = false)
+	private @Nullable String traceParent;
+
 	@Version
 	@Column(nullable = false)
 	private @Nullable Long version;
@@ -68,7 +72,7 @@ public class ActivationRequest {
 	}
 
 	private ActivationRequest(String clientId, String externalId, String customerId, String productCode,
-			Instant now) {
+			Instant now, @Nullable String traceParent) {
 		this.id = UUID.randomUUID();
 		this.clientId = clientId;
 		this.externalId = externalId;
@@ -79,11 +83,12 @@ public class ActivationRequest {
 		this.nextAttemptAt = now;
 		this.createdAt = now;
 		this.updatedAt = now;
+		this.traceParent = traceParent;
 	}
 
 	public static ActivationRequest create(String clientId, String externalId, String customerId, String productCode,
-			Instant now) {
-		return new ActivationRequest(clientId, externalId, customerId, productCode, truncate(now));
+			Instant now, @Nullable String traceParent) {
+		return new ActivationRequest(clientId, externalId, customerId, productCode, truncate(now), traceParent);
 	}
 
 	public void startProcessing(Instant now) {
@@ -192,6 +197,10 @@ public class ActivationRequest {
 
 	public Instant getUpdatedAt() {
 		return updatedAt;
+	}
+
+	public @Nullable String getTraceParent() {
+		return traceParent;
 	}
 
 	public @Nullable Long getVersion() {

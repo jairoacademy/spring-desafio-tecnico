@@ -205,7 +205,7 @@ class ProviderIntegrationTests {
 		stubStatus(200);
 		ActivationRequest request = repository
 			.save(ActivationRequest.create(OWNER, "EXT-FUTURE", "CUST-1", "INTERNET-500",
-					Instant.now().plusSeconds(60)));
+					Instant.now().plusSeconds(60), null));
 
 		dispatcher.dispatchDue();
 
@@ -268,7 +268,7 @@ class ProviderIntegrationTests {
 
 	private ActivationRequest saveProcessing(String externalId) {
 		ActivationRequest request = ActivationRequest.create(OWNER, externalId, "CUST-1", "INTERNET-500",
-				Instant.now());
+				Instant.now(), null);
 		request.startProcessing(Instant.now());
 		return repository.save(request);
 	}
@@ -280,7 +280,7 @@ class ProviderIntegrationTests {
 	}
 
 	private ActivationRequest save(String externalId) {
-		return repository.save(ActivationRequest.create(OWNER, externalId, "CUST-1", "INTERNET-500", Instant.now()));
+		return repository.save(ActivationRequest.create(OWNER, externalId, "CUST-1", "INTERNET-500", Instant.now(), null));
 	}
 
 	private ActivationRequest reload(ActivationRequest request) {

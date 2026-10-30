@@ -1,7 +1,9 @@
 package academy.jairo.springdesafiotecnico.activation.application;
 
 import java.time.Clock;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -9,6 +11,9 @@ import academy.jairo.springdesafiotecnico.activation.domain.ActivationRequest;
 import academy.jairo.springdesafiotecnico.activation.domain.ActivationStatus;
 import academy.jairo.springdesafiotecnico.activation.infrastructure.ActivationRequestRepository;
 import academy.jairo.springdesafiotecnico.activation.infrastructure.ActivationRequestSpecifications;
+import io.micrometer.tracing.Span;
+import io.micrometer.tracing.Tracer;
+import io.micrometer.tracing.propagation.Propagator;
 import org.jspecify.annotations.Nullable;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
@@ -23,13 +28,22 @@ public class ActivationRequestService {
 	// Ordenação fixa, atendida pelos índices (client_id[, customer_id|status], created_at DESC); id desempata.
 	private static final Sort NEWEST_FIRST = Sort.by(Sort.Direction.DESC, "createdAt", "id");
 
+	static final String TRACEPARENT = "traceparent";
+
 	private final ActivationRequestRepository repository;
 
 	private final Clock clock;
 
-	public ActivationRequestService(ActivationRequestRepository repository, Clock clock) {
+	private final Tracer tracer;
+
+	private final Propagator propagator;
+
+	public ActivationRequestService(ActivationRequestRepository repository, Clock clock, Tracer tracer,
+			Propagator propagator) {
 		this.repository = repository;
 		this.clock = clock;
+		this.tracer = tracer;
+		this.propagator = propagator;
 	}
 
 	/**
@@ -44,8 +58,8 @@ public class ActivationRequestService {
 			return resolveExisting(existing.get(), clientId, customerId, productCode);
 		}
 		try {
-			ActivationRequest saved = repository
-				.saveAndFlush(ActivationRequest.create(clientId, externalId, customerId, productCode, clock.instant()));
+			ActivationRequest saved = repository.saveAndFlush(ActivationRequest.create(clientId, externalId,
+					customerId, productCode, clock.instant(), currentTraceParent()));
 			return new CreationResult(saved, true);
 		}
 		catch (DataIntegrityViolationException ex) {
@@ -53,6 +67,20 @@ public class ActivationRequestService {
 			ActivationRequest winner = repository.findByExternalId(externalId).orElseThrow(() -> ex);
 			return resolveExisting(winner, clientId, customerId, productCode);
 		}
+	}
+
+	/**
+	 * {@code traceparent} do span atual, gravado só em registro novo: o retry idempotente não o altera.
+	 * Sem span (tracing desligado), não há contexto a guardar.
+	 */
+	private @Nullable String currentTraceParent() {
+		Span span = tracer.currentSpan();
+		if (span == null) {
+			return null;
+		}
+		Map<String, String> carrier = new HashMap<>();
+		propagator.inject(span.context(), carrier, Map::put);
+		return carrier.get(TRACEPARENT);
 	}
 
 	/**
