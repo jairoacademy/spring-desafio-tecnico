@@ -144,6 +144,16 @@ curl localhost:8080/actuator/health/readiness
 
 Os demais endpoints do Actuator (`env`, `beans`, `configprops` etc.) não são expostos via HTTP.
 
+### Logs
+
+Os logs saem no console em JSON, um objeto por linha (formato Logstash do Spring Boot). Todo log emitido durante uma requisição ou um envio ao provedor traz `traceId` e `spanId`, o mesmo `traceId` do ProblemDetail de erro. Tokens e credenciais não são logados.
+
+```json
+{"@timestamp":"2026-10-30T12:00:00.000Z","level":"ERROR","message":"Erro inesperado ...","traceId":"4bf92f3577b34da6a3ce929d0e0e4736","spanId":"00f067aa0ba902b7", ...}
+```
+
+Para ler no terminal local, use `jq`: `./mvnw spring-boot:run | jq -R 'fromjson? // .'` ou, para achar um erro pelo `traceId` devolvido ao cliente: `... | grep 4bf92f35 | jq .`
+
 ## API
 
 | Método e caminho | Escopo exigido | Descrição | Sucesso |
