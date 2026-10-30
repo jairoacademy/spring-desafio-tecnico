@@ -345,4 +345,4 @@ Em uma etapa posterior do processo, você poderá ser convidado a apresentar sua
 
 ---
 
-*Processo seletivo conduzido pela Deroyque IT Consulting Services. Dúvidas: junio@deroyque.com*
+*Processo seletivo conduzido pela Deroyque IT Consulting Services.*
