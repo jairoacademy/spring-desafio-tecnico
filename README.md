@@ -8,8 +8,6 @@ Desafio técnico Java (Spring Boot 4.1.2, Java 21), desenvolvido com Spec-Driven
 - Plano de execução: [docs/plano-sdd-openspec.md](docs/plano-sdd-openspec.md)
 - Decisões técnicas (ADRs): [docs/adr/](docs/adr/)
 
-> Em construção. Decisões técnicas serão documentadas ao longo do desenvolvimento.
-
 ## Como executar
 
 ### Tudo com Docker Compose
@@ -571,3 +569,46 @@ docker run --rm -p 8080:8080 --memory=512m \
   -e JWT_ISSUER_URI=... -e JWT_AUDIENCE=... \
   ativacao
 ```
+
+## Cenário de análise
+
+Cenário do enunciado (item 10): tempo médio da API de 300 ms para 2,5 s, CPU em 45%, memória em 60%, algumas consultas de 50 ms para 1,2 s e o serviço externo de 400 ms para 3 s.
+
+**1. O que investigar primeiro.** CPU e memória estão normais, então o problema parece espera, não processamento. Começo pelo que mudou (deploy, volume, dados) e pelo pool de conexões do Hikari: `hikaricp_connections_pending` e `hikaricp_connections_active` perto do máximo indicam threads esperando conexão.
+
+**2. Aplicação, banco ou integração.** Comparo o tempo gasto em cada destino: `http_server_requests_seconds` (API inteira), `http_client_requests_seconds{uri="/provider/v1/activate"}` (provedor) e o tempo das consultas em `pg_stat_statements`. Um thread dump mostra onde as threads esperam: em socket do provedor, em `getConnection` ou em lock do banco. `pg_stat_activity` mostra sessões `idle in transaction` e locks.
+
+**3. Logs e métricas úteis.** Os logs em JSON com `traceId` ligam a requisição lenta ao envio ao provedor. As métricas são p95/p99 por rota, taxa de erro do provedor, `activation_requests_transitions_total` e as do Hikari. No banco, `EXPLAIN ANALYZE` das consultas lentas.
+
+**4. Melhorias possíveis.** Índice ou ajuste de consulta, se o plano mostrar varredura. Timeout, retry com backoff e circuit breaker no provedor. Pool e timeouts dimensionados. Cache de leitura, se houver consulta repetida.
+
+**5. Causa comum (diferencial).** Hipótese: o provedor ficou lento (3 s) e alguma chamada a ele segura uma conexão do banco, por exemplo dentro de uma transação. As conexões ficam presas, o pool esgota, as consultas esperam conexão e parecem lentas (1,2 s) sem ter problema próprio, e a API soma tudo (2,5 s). Confirmo se as consultas lentas somem do `pg_stat_statements` (o tempo estava na fila do pool) e se `hikaricp_connections_pending` sobe junto com a lentidão do provedor. Neste projeto o desenho evita isso: a chamada ao provedor acontece fora de transação, e a API responde sem esperar o provedor (ver [Integração com o provedor](#integração-com-o-provedor)).
+
+**6. Validar a correção (diferencial).** Comparo p95/p99, taxa de erro e `hikaricp_connections_pending` antes e depois, no mesmo intervalo e com carga parecida. Mantenho um alerta no p95 da API para detectar regressão.
+
+## Pontos pendentes
+
+- O provedor é um mock (WireMock). O contrato real, a autenticação e os limites dele não foram validados.
+- O emissor de tokens do Compose serve só para desenvolvimento. Em produção é preciso apontar para o servidor de autorização real.
+- `/actuator/prometheus` não exige token. Em produção, restrinja pela rede (ver [Observabilidade em produção](#observabilidade-em-produção)).
+- Não há coletor de traces nem Prometheus no Compose; a exportação OTLP vem desligada.
+- Não houve teste de carga. O dimensionamento de pool e threads usa valores padrão.
+
+## Melhorias futuras
+
+- Gauge de solicitações `PENDING` consultando o banco (hoje só há contadores de eventos).
+- Paginação por cursor na listagem, para volumes grandes.
+- Porta de gerenciamento separada (`management.server.port`) para o Actuator.
+- Circuit breaker no provedor e dead-letter para solicitações que esgotam as tentativas.
+- Alertas e dashboards sobre as métricas expostas.
+- Teste de carga para calibrar pool, timeouts e instâncias.
+
+## Uso de IA
+
+O projeto usou Spec-Driven Development com [OpenSpec](https://github.com/Fission-AI/OpenSpec) e Claude Code. O fluxo de cada change foi:
+
+1. Eu defini o escopo e as decisões (plano em [docs/plano-sdd-openspec.md](docs/plano-sdd-openspec.md)) e revisei as specs geradas (`proposal`, `design`, `specs`, `tasks`) antes de qualquer código.
+2. O agente implementou uma task por vez, com testes, e rodou `./mvnw verify` ao fim de cada uma.
+3. Eu revisei cada diff e cada commit (Conventional Commits). A change entrou na `main` por pull request com merge commit e foi arquivada em `openspec/changes/archive/`, que guarda o histórico.
+
+Regras do agente ficam em [CLAUDE.md](CLAUDE.md): só implementar o que está em `tasks.md`, não usar APIs do Boot 3, não expor stack trace nem logar credenciais, e justificar no `design.md` toda dependência nova. As decisões relevantes estão nos ADRs em [docs/adr/](docs/adr/) e as respostas finais do cenário de análise devem ser entendidas e defendidas por mim na conversa técnica.
