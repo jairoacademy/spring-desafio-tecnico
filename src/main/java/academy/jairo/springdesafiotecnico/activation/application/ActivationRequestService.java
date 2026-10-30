@@ -38,12 +38,15 @@ public class ActivationRequestService {
 
 	private final Propagator propagator;
 
+	private final ActivationMetrics metrics;
+
 	public ActivationRequestService(ActivationRequestRepository repository, Clock clock, Tracer tracer,
-			Propagator propagator) {
+			Propagator propagator, ActivationMetrics metrics) {
 		this.repository = repository;
 		this.clock = clock;
 		this.tracer = tracer;
 		this.propagator = propagator;
+		this.metrics = metrics;
 	}
 
 	/**
@@ -60,6 +63,7 @@ public class ActivationRequestService {
 		try {
 			ActivationRequest saved = repository.saveAndFlush(ActivationRequest.create(clientId, externalId,
 					customerId, productCode, clock.instant(), currentTraceParent()));
+			metrics.transitionedTo(ActivationStatus.PENDING);
 			return new CreationResult(saved, true);
 		}
 		catch (DataIntegrityViolationException ex) {

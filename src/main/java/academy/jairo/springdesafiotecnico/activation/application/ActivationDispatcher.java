@@ -7,6 +7,7 @@ import java.util.Map;
 import java.util.Objects;
 
 import academy.jairo.springdesafiotecnico.activation.domain.ActivationRequest;
+import academy.jairo.springdesafiotecnico.activation.domain.ActivationStatus;
 import academy.jairo.springdesafiotecnico.activation.domain.FailureReason;
 import academy.jairo.springdesafiotecnico.activation.infrastructure.ActivationRequestRepository;
 import academy.jairo.springdesafiotecnico.activation.infrastructure.provider.ProviderGateway;
@@ -48,9 +49,12 @@ public class ActivationDispatcher {
 
 	private final Propagator propagator;
 
+	private final ActivationMetrics metrics;
+
 	public ActivationDispatcher(ActivationRequestRepository repository, ProviderGateway gateway,
 			RetryPolicy retryPolicy, ActivationDispatchProperties properties,
-			PlatformTransactionManager transactionManager, Clock clock, Tracer tracer, Propagator propagator) {
+			PlatformTransactionManager transactionManager, Clock clock, Tracer tracer, Propagator propagator,
+			ActivationMetrics metrics) {
 		this.repository = repository;
 		this.gateway = gateway;
 		this.retryPolicy = retryPolicy;
@@ -59,6 +63,7 @@ public class ActivationDispatcher {
 		this.clock = clock;
 		this.tracer = tracer;
 		this.propagator = propagator;
+		this.metrics = metrics;
 	}
 
 	/** Um ciclo do worker. Devolve quantas solicitações foram reservadas. */
@@ -95,7 +100,7 @@ public class ActivationDispatcher {
 	 * mais que {@code stale-after}. O desfecho da chamada é desconhecido, por isso conta como tentativa.
 	 */
 	public int reconcileStale() {
-		Integer reconciled = transaction.execute(status -> {
+		List<ActivationStatus> reconciled = transaction.execute(status -> {
 			Instant now = clock.instant();
 			List<ActivationRequest> stale = repository
 				.lockStaleProcessing(now.minus(properties.reconciliation().staleAfter()), properties.batchSize());
@@ -104,9 +109,10 @@ public class ActivationDispatcher {
 						request.getId(), request.getUpdatedAt());
 				registerTemporaryFailure(request, null, now);
 			}
-			return stale.size();
+			return stale.stream().map(ActivationRequest::getStatus).toList();
 		});
-		return Objects.requireNonNull(reconciled);
+		Objects.requireNonNull(reconciled).forEach(metrics::transitionedTo);
+		return reconciled.size();
 	}
 
 	/** Passo 1: reserva o lote e grava {@code PROCESSING} antes de qualquer chamada ao provedor. */
@@ -123,7 +129,8 @@ public class ActivationDispatcher {
 						request.getTraceParent()))
 				.toList();
 		});
-		return Objects.requireNonNull(claimed);
+		Objects.requireNonNull(claimed).forEach(request -> metrics.transitionedTo(ActivationStatus.PROCESSING));
+		return claimed;
 	}
 
 	/**
@@ -132,11 +139,11 @@ public class ActivationDispatcher {
 	 */
 	void applyOutcome(ClaimedRequest claimed, ProviderOutcome outcome) {
 		try {
-			transaction.executeWithoutResult(status -> {
+			ActivationStatus applied = transaction.execute(status -> {
 				ActivationRequest request = repository.findById(claimed.id()).orElse(null);
 				if (request == null || !Objects.equals(request.getVersion(), claimed.version())) {
 					log.info("Resultado tardio da solicitação {} descartado: {}", claimed.id(), outcome);
-					return;
+					return null;
 				}
 				Instant now = clock.instant();
 				switch (outcome) {
@@ -146,7 +153,12 @@ public class ActivationDispatcher {
 						registerTemporaryFailure(request, failure.retryAt(), now);
 				}
 				repository.saveAndFlush(request);
+				return request.getStatus();
 			});
+			// resultado tardio descartado não é transição
+			if (applied != null) {
+				metrics.transitionedTo(applied);
+			}
 		}
 		catch (ObjectOptimisticLockingFailureException ex) {
 			log.info("Resultado tardio da solicitação {} descartado: gravação concorrente", claimed.id());

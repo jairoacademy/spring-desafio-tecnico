@@ -12,6 +12,7 @@ import academy.jairo.springdesafiotecnico.activation.domain.FailureReason;
 import academy.jairo.springdesafiotecnico.activation.infrastructure.ActivationRequestRepository;
 import academy.jairo.springdesafiotecnico.activation.infrastructure.provider.ProviderOutcome;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
+import io.micrometer.core.instrument.MeterRegistry;
 import com.github.tomakehurst.wiremock.stubbing.Scenario;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -61,6 +62,9 @@ class ProviderIntegrationTests {
 
 	@Autowired
 	private JdbcTemplate jdbcTemplate;
+
+	@Autowired
+	private MeterRegistry meterRegistry;
 
 	@BeforeEach
 	void cleanUp() {
@@ -264,6 +268,23 @@ class ProviderIntegrationTests {
 		ActivationRequest current = reload(request);
 		assertThat(current.getStatus()).isEqualTo(ActivationStatus.PENDING);
 		assertThat(current.getAttempts()).isEqualTo(1);
+	}
+
+	@Test
+	void lateResultDoesNotCountAsTransition() {
+		ActivationRequest request = save("EXT-LATE-METRIC");
+		ClaimedRequest claimed = dispatcher.claimDue().getFirst();
+		ageUpdatedAt(request, Duration.ofMinutes(2));
+		dispatcher.reconcileStale();
+		double completedBefore = transitions("COMPLETED");
+
+		dispatcher.applyOutcome(claimed, new ProviderOutcome.Accepted());
+
+		assertThat(transitions("COMPLETED")).isEqualTo(completedBefore);
+	}
+
+	private double transitions(String status) {
+		return meterRegistry.get(ActivationMetrics.TRANSITIONS).tag("status", status).counter().count();
 	}
 
 	private ActivationRequest saveProcessing(String externalId) {

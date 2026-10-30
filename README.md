@@ -154,6 +154,32 @@ Os logs saem no console em JSON, um objeto por linha (formato Logstash do Spring
 
 Para ler no terminal local, use `jq`: `./mvnw spring-boot:run | jq -R 'fromjson? // .'` ou, para achar um erro pelo `traceId` devolvido ao cliente: `... | grep 4bf92f35 | jq .`
 
+### Métricas
+
+`GET /actuator/prometheus` expõe as métricas no formato de texto do Prometheus, sem token (só agregados, sem dados de negócio; ver [Produção](#produção) para restringir por rede). Os rótulos nunca levam `id`, `externalId` nem `customerId`: o `uri` é o template da rota (`/api/v1/requests/{id}`).
+
+| Pergunta | Métrica | Origem |
+|---|---|---|
+| Latência da API | `http_server_requests_seconds` (`uri`, `method`, `status`, `outcome`) | automática |
+| Latência e erros do provedor | `http_client_requests_seconds` (`uri="/provider/v1/activate"`, `status`, `outcome`, `exception`) | automática; timeout aparece com `status="CLIENT_ERROR"` |
+| Solicitações por status | `activation_requests_transitions_total{status}` | contador de transições para cada status |
+
+Consultas de exemplo (PromQL):
+
+```promql
+# p95 da API por rota, janela de 5 min
+histogram_quantile(0.95, sum by (le, uri) (rate(http_server_requests_seconds_bucket[5m])))
+
+# taxa de erro do provedor (respostas 5xx e falhas de I/O)
+sum(rate(http_client_requests_seconds_count{uri="/provider/v1/activate", outcome!="SUCCESS"}[5m]))
+  / sum(rate(http_client_requests_seconds_count{uri="/provider/v1/activate"}[5m]))
+
+# solicitações que falharam de vez nos últimos 5 min
+increase(activation_requests_transitions_total{status="FAILED"}[5m])
+```
+
+O contador mede eventos, não estoque: quantas solicitações `PENDING` há agora (um gauge consultando o banco) fica como melhoria futura.
+
 ## API
 
 | Método e caminho | Escopo exigido | Descrição | Sucesso |
