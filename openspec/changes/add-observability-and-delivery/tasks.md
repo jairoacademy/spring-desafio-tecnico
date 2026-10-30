@@ -26,7 +26,7 @@
 
 ## 6. Decisões e verificação final
 
-- [ ] 6.1 Escrever `docs/adr/0006-observabilidade.md` (`traceparent` gravado e span filho no worker, pai em vez de link, amostragem, logs Logstash, métricas e contador de transições, Prometheus público, OTLP opcional); atualizar a seção "Origem do `traceId`" do README e a lista de ADRs; rodar `./mvnw verify` e verificar que passa
+- [x] 6.1 Escrever `docs/adr/0006-observabilidade.md` (`traceparent` gravado e span filho no worker, pai em vez de link, amostragem, logs Logstash, métricas e contador de transições, Prometheus público, OTLP opcional); atualizar a seção "Origem do `traceId`" do README e a lista de ADRs; rodar `./mvnw verify` e verificar que passa
 
 ## Workflow follow-up
 

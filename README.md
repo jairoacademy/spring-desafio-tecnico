@@ -480,7 +480,11 @@ O teste `ActivationRequestConcurrencyIntegrationTests` dispara 10 criações sim
 
 ### Origem do `traceId`
 
-Micrometer Tracing com bridge OpenTelemetry, sem exportador de spans. Cada requisição HTTP recebe um trace no formato W3C (32 hex); o mesmo `traceId` vai para o MDC (padrão de log do Spring Boot) e para o ProblemDetail. Se o chamador enviar `traceparent`, o trace dele é continuado. A propagação ao provedor e a exportação para um coletor ficam para a etapa de observabilidade, sem mudar esta origem.
+Micrometer Tracing com OpenTelemetry (`spring-boot-starter-opentelemetry`). Cada requisição HTTP recebe um trace no formato W3C (32 hex); o mesmo `traceId` vai para o MDC (e daí para os [logs JSON](#logs)) e para o ProblemDetail. Se o chamador enviar `traceparent`, o trace dele é continuado.
+
+O envio ao provedor roda no worker, depois do `POST`. Para manter o mesmo `traceId`, a criação grava o `traceparent` da requisição na solicitação (coluna `trace_parent`, migração `V5`, só em registro novo). O worker abre o span `activation.dispatch` como filho desse contexto: os logs do envio e o header `traceparent` enviado ao provedor têm o `traceId` do `POST`, inclusive nas novas tentativas. Solicitação sem contexto gravado é enviada em um trace novo. A exportação dos spans para um coletor é opcional ([Observabilidade em produção](#observabilidade-em-produção)).
+
+Decisões registradas no [ADR 0006](docs/adr/0006-observabilidade.md).
 
 ### Índices da listagem
 
