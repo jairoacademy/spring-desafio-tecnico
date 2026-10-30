@@ -46,7 +46,7 @@ O Boot amostra 10% por padrão. Fora da amostra o `traceId` continua existindo (
 
 **4. Starter `spring-boot-starter-opentelemetry` com OTLP opcional.**
 Substitui `spring-boot-micrometer-tracing-opentelemetry` + `micrometer-tracing-bridge-otel` (o starter traz os dois e o exportador OTLP; nome confirmado na documentação do Boot 4.1 e no Maven Central, versão gerida pelo BOM). Configuração:
-- `management.opentelemetry.tracing.export.otlp.endpoint=${OTLP_TRACING_ENDPOINT:}`: sem valor, o Boot não cria o exportador. A task de dependência confirma isso com teste (contexto sobe sem bean de exportador de spans) e, se o Boot criar o exportador mesmo sem endpoint, desliga a exportação por `management.tracing.export.enabled` ligada à presença da variável.
+- `management.tracing.export.otlp.enabled=${OTLP_TRACING_ENABLED:false}` e `management.opentelemetry.tracing.export.otlp.endpoint=${OTLP_TRACING_ENDPOINT:http://localhost:4318/v1/traces}`: o Boot 4.1.2 cria o exportador mesmo com endpoint vazio e a subida falha (`Invalid endpoint, must start with http://`), e o `spring.config.activate` não tem `on-property`; por isso a exportação tem chave própria, desligada por padrão. Confirmado por `OtlpExportIntegrationTests` (contexto sem bean `SpanExporter`).
 - Se o starter trouxer o registro OTLP de métricas, `management.otlp.metrics.export.enabled=false`: métricas saem só pelo Prometheus.
 Alternativa: Jaeger no Compose. Rejeitada pelo usuário nesta change: mais um serviço no smoke test do CI; o README explica como apontar para um coletor.
 
